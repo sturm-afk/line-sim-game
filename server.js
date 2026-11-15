@@ -103,6 +103,24 @@ function createApp(dataDir) {
         db.prepare('INSERT OR IGNORE INTO teams (id, name) VALUES (?, ?)').run(randomUUID(), name);
         return json(res, 200, db.prepare('SELECT id, name FROM teams WHERE name = ? COLLATE NOCASE').get(name));
       }
+      if (req.method === 'POST' && url.pathname === '/api/station-reset') {
+        const input = await body(req);
+        if (typeof input?.teamId !== 'string' || !db.prepare('SELECT id FROM teams WHERE id = ?').get(input.teamId)) {
+          return json(res, 404, { error: 'Team not found.' });
+        }
+        if (!stations.some(station => station.id === input.stationId)) {
+          return json(res, 400, { error: 'A valid station is required.' });
+        }
+        const { changes } = db.prepare('DELETE FROM events WHERE team_id = ? AND station_id = ?')
+          .run(input.teamId, input.stationId);
+        const reset = { teamId: input.teamId, stationId: input.stationId };
+        for (const subscriber of subscribers) {
+          if (!subscriber.teamId || subscriber.teamId === reset.teamId) {
+            subscriber.res.write(`event: reset\ndata: ${JSON.stringify(reset)}\n\n`);
+          }
+        }
+        return json(res, 200, { deleted: changes });
+      }
       if (req.method === 'GET' && url.pathname === '/api/events/stream') {
         const teamId = url.searchParams.get('teamId');
         if (teamId && !db.prepare('SELECT id FROM teams WHERE id = ?').get(teamId)) {

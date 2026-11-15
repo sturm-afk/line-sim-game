@@ -2,21 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Line Sim Game</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; background: #f3f6fa; color: #172338; font: 18px system-ui, sans-serif; }
-    main { max-width: 32rem; margin: auto; padding: 2rem 1.25rem; }
-    h1 { font-size: 2rem; margin-bottom: .5rem; }
+    body { min-height: 100vh; margin: 0; background: #f3f6fa; color: #172338; font: 16px system-ui, sans-serif; }
+    main { max-width: 32rem; margin: auto; padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
+    h1 { font-size: clamp(1.6rem, 7vw, 2rem); margin-bottom: .5rem; }
     p { line-height: 1.5; }
     label { display: block; font-weight: 600; margin-bottom: .5rem; }
     input, button { font: inherit; border-radius: .6rem; }
-    input, select { width: 100%; padding: .8rem; border: 1px solid #718096; border-radius: .6rem; font: inherit; }
+    input, select { width: 100%; min-height: 3rem; padding: .7rem; border: 1px solid #718096; border-radius: .6rem; font: inherit; }
     button { cursor: pointer; border: 0; font-weight: 700; }
     button:disabled { opacity: .6; cursor: wait; }
-    #join { margin-top: .75rem; padding: .8rem 1.25rem; background: #263d5a; color: white; }
-    #complete { width: 100%; min-height: 8rem; margin-top: 1rem; padding: 1.5rem; background: #087c57; color: white; font-size: 1.6rem; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #2468ad; outline-offset: 2px; }
+    #join { width: 100%; min-height: 3rem; margin-top: .75rem; padding: .8rem 1.25rem; background: #263d5a; color: white; }
+    #complete { width: 100%; min-height: 6rem; margin-top: 1rem; padding: 1.25rem; background: #087c57; color: white; font-size: 1.4rem; }
     #qc-controls { grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 1rem; }
     #qc-controls:not([hidden]) { display: grid; }
     #qc-controls button { min-height: 5rem; color: white; font-size: 1.3rem; }
@@ -26,6 +27,13 @@
     .error { color: #a32121; }
     .success { color: #087048; }
     .hint { font-size: .9rem; color: #48566b; }
+    .station-actions { display: flex; gap: .75rem; }
+    .station-actions button { min-height: 3rem; flex: 1; padding: .65rem; }
+    #change-team { background: #263d5a; color: white; }
+    #reset-station { background: #a32121; color: white; }
+    @media (max-width: 24rem) {
+      .station-actions { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
@@ -52,7 +60,10 @@
         <button id="qc-fail" type="button">Fail <span id="qc-fail-count">0</span></button>
       </div>
       <p id="status" role="status" aria-live="polite"></p>
-      <button id="change-team" type="button">Change team</button>
+      <div class="station-actions">
+        <button id="change-team" type="button">Change team</button>
+        <button id="reset-station" type="button">Reset station</button>
+      </div>
     </section>
   </main>
   <script>
@@ -73,6 +84,7 @@
     const status = document.querySelector('#status');
     const completionCount = document.querySelector('#completion-count');
     const changeTeam = document.querySelector('#change-team');
+    const resetStation = document.querySelector('#reset-station');
     let team = null;
     let pendingId = null;
     let pendingResult = null;
@@ -102,6 +114,11 @@
       if (event.teamId !== team?.id || event.stationId !== stationSelect.value) return;
       if (event.playerId === playerId) refreshCompletions();
       else if (event.result) refreshQcCounts();
+    }
+
+    function handleStationReset(event) {
+      const reset = JSON.parse(event.data);
+      if (reset.teamId === team?.id && reset.stationId === stationSelect.value) refreshCompletions();
     }
 
     async function refreshCompletions() {
@@ -151,6 +168,7 @@
       refreshCompletions();
       eventSource = new EventSource(`/api/events/stream?teamId=${encodeURIComponent(team.id)}`);
       eventSource.addEventListener('completion', event => addCompletion(JSON.parse(event.data)));
+      eventSource.addEventListener('reset', handleStationReset);
       eventSource.addEventListener('open', refreshCompletions);
     }
 
@@ -218,6 +236,7 @@
       }
       buttons.forEach(button => { button.disabled = true; });
       changeTeam.disabled = true;
+      resetStation.disabled = true;
       stationSelect.disabled = true;
       showStatus(pendingResult ? `Saving ${pendingResult}…` : 'Saving completion…');
       try {
@@ -241,6 +260,7 @@
         qcPass.disabled = Boolean(pendingId) && pendingResult !== 'pass';
         qcFail.disabled = Boolean(pendingId) && pendingResult !== 'fail';
         changeTeam.disabled = Boolean(pendingId);
+        resetStation.disabled = Boolean(pendingId);
         stationSelect.disabled = Boolean(pendingId);
       }
     }
@@ -259,6 +279,29 @@
       const url = new URL(location.href);
       url.searchParams.delete('team');
       history.replaceState(null, '', url);
+    });
+
+    resetStation.addEventListener('click', async () => {
+      const selected = stations.find(item => item.id === stationSelect.value);
+      if (!team || !selected || !confirm(`Reset all ${team.name} completions for ${selected.name}? This cannot be undone.`)) return;
+      resetStation.disabled = true;
+      changeTeam.disabled = true;
+      stationSelect.disabled = true;
+      showStatus('Resetting station…');
+      try {
+        await request('/api/station-reset', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: team.id, stationId: selected.id })
+        });
+        refreshCompletions();
+        showStatus('Station completions reset.', 'success');
+      } catch {
+        showStatus('Could not reset station completions. Please try again.', 'error');
+      } finally {
+        resetStation.disabled = Boolean(pendingId);
+        changeTeam.disabled = Boolean(pendingId);
+        stationSelect.disabled = Boolean(pendingId);
+      }
     });
 
     Promise.all([request('/api/stations'), request('/api/teams')]).then(([availableStations, availableTeams]) => {

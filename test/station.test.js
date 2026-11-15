@@ -104,6 +104,12 @@ test('completion subscriptions deliver only matching team events', async () => {
     assert.match(message, /event: completion/);
     assert.equal(JSON.parse(message.split('data: ')[1]).id, id);
     assert.equal(JSON.parse(message.split('data: ')[1]).playerId, playerId);
+    await post('/api/station-reset', { teamId: team.id, stationId: 'cut-blister' });
+    const resetMessage = new TextDecoder().decode((await reader.read()).value);
+    assert.match(resetMessage, /event: reset/);
+    assert.deepEqual(JSON.parse(resetMessage.split('data: ')[1]), {
+      teamId: team.id, stationId: 'cut-blister'
+    });
     await reader.cancel();
   } finally {
     server.closeAllConnections();
@@ -189,6 +195,52 @@ test('QC pass and fail results are counted by team and station', async () => {
     const events = await (await fetch(`${base}/api/events?teamId=${team.id}`)).json();
     assert.equal(events[0].result, 'pass');
     assert.equal(events[1].result, 'fail');
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('station reset deletes only the selected team and station completions', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-'));
+  const server = createApp(dir);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (route, data) => fetch(base + route, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+
+  try {
+    const team = await (await post('/api/teams', { name: 'Reset team' })).json();
+    const otherTeam = await (await post('/api/teams', { name: 'Other reset team' })).json();
+    const playerId = randomUUID();
+    const addCompletion = (teamId, stationId) => post('/api/events', {
+      id: randomUUID(), playerId, teamId, stationId
+    });
+    await addCompletion(team.id, 'cut-blister');
+    await addCompletion(team.id, 'cut-blister');
+    await addCompletion(team.id, 'cut-box');
+    await addCompletion(otherTeam.id, 'cut-blister');
+
+    const resetResponse = await post('/api/station-reset', {
+      teamId: team.id, stationId: 'cut-blister'
+    });
+    assert.equal(resetResponse.status, 200);
+    assert.deepEqual(await resetResponse.json(), { deleted: 2 });
+    const remaining = await (await fetch(
+      `${base}/api/completions?playerId=${playerId}&stationId=cut-blister`
+    )).json();
+    assert.equal(remaining.count, 1);
+    assert.deepEqual((await (await fetch(`${base}/api/events?teamId=${team.id}`)).json())
+      .map(event => event.stationId), ['cut-box']);
+    assert.equal((await (await fetch(`${base}/api/events?teamId=${otherTeam.id}`)).json()).length, 1);
+    assert.equal((await post('/api/station-reset', {
+      teamId: team.id, stationId: 'invalid'
+    })).status, 400);
+    assert.equal((await post('/api/station-reset', {
+      teamId: randomUUID(), stationId: 'cut-blister'
+    })).status, 404);
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
