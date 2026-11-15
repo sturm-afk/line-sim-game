@@ -5,32 +5,60 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Line Sim Game</title>
   <style>
+    :root {
+      color-scheme: light;
+      --blue-deep: #073b5c;
+      --blue: #007ba7;
+      --blue-light: #dceff6;
+      --orange: #b6531d;
+      --orange-light: #f5e3d8;
+      --green: #167a45;
+      --green-light: #e0f2e8;
+      --red: #b42318;
+      --red-light: #fde8e7;
+      --background: #f4f6f8;
+      --card: #fff;
+      --text: #17191c;
+      --text-secondary: #56616b;
+      --border: #d5dce2;
+      --shadow: 0 12px 32px rgb(7 59 92 / 9%);
+    }
     * { box-sizing: border-box; }
-    body { min-height: 100vh; margin: 0; background: #f3f6fa; color: #172338; font: 16px system-ui, sans-serif; }
-    main { max-width: 32rem; margin: auto; padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
-    h1 { font-size: clamp(1.6rem, 7vw, 2rem); margin-bottom: .5rem; }
+    body { min-height: 100vh; margin: 0; background: linear-gradient(145deg, #eaf3f7, var(--background) 48%); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 36rem; margin: auto; padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
+    main > p:first-child { margin: 0; color: var(--blue-deep); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    main > p:nth-child(2) { margin: .35rem 0 1.5rem; }
+    a { color: var(--blue); font-weight: 700; text-decoration-thickness: .08em; text-underline-offset: .2em; }
+    h1 { margin: 0 0 1.25rem; color: var(--blue-deep); font-size: clamp(1.6rem, 7vw, 2rem); line-height: 1.2; }
     p { line-height: 1.5; }
-    label { display: block; font-weight: 600; margin-bottom: .5rem; }
-    input, button { font: inherit; border-radius: .6rem; }
-    input, select { width: 100%; min-height: 3rem; padding: .7rem; border: 1px solid #718096; border-radius: .6rem; font: inherit; }
-    button { cursor: pointer; border: 0; font-weight: 700; }
+    label { display: block; margin: 1rem 0 .45rem; color: var(--blue-deep); font-weight: 700; }
+    input, button { font: inherit; border-radius: .65rem; }
+    input, select { width: 100%; min-height: 3.25rem; padding: .7rem .85rem; border: 1px solid #aebbc5; background: var(--card); color: var(--text); font: inherit; }
+    button { cursor: pointer; border: 0; font-weight: 750; transition: filter .15s ease, transform .15s ease; }
+    button:not(:disabled):active { transform: translateY(1px); }
+    button:not(:disabled):hover { filter: brightness(1.08); }
     button:disabled { opacity: .6; cursor: wait; }
-    button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #2468ad; outline-offset: 2px; }
-    #join { width: 100%; min-height: 3rem; margin-top: .75rem; padding: .8rem 1.25rem; background: #263d5a; color: white; }
-    #complete { width: 100%; min-height: 6rem; margin-top: 1rem; padding: 1.25rem; background: #087c57; color: white; font-size: 1.4rem; }
+    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #f0a15c; outline-offset: 3px; }
+    #team-form, #station { padding: clamp(1rem, 5vw, 1.5rem); border: 1px solid var(--border); border-radius: 1rem; background: var(--card); box-shadow: var(--shadow); }
+    #join { width: 100%; min-height: 3.25rem; margin-top: 1.25rem; padding: .8rem 1.25rem; background: var(--orange); color: white; }
+    #station-title { margin-bottom: 1rem; }
+    #station > p:first-of-type { margin: 0; padding: .85rem 1rem; border-left: 4px solid var(--blue); border-radius: .4rem; background: var(--blue-light); color: var(--blue-deep); }
+    #station .hint { margin: .75rem 0; }
+    #complete { width: 100%; min-height: 6rem; margin-top: 1rem; padding: 1.25rem; background: linear-gradient(115deg, var(--blue-deep), var(--blue)); color: white; font-size: 1.5rem; box-shadow: 0 6px 16px rgb(7 59 92 / 18%); }
     #qc-controls { grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 1rem; }
     #qc-controls:not([hidden]) { display: grid; }
     #qc-controls button { min-height: 5rem; color: white; font-size: 1.3rem; }
-    #qc-pass { background: #087c57; }
-    #qc-fail { background: #a32121; }
-    #status { min-height: 3rem; font-weight: 600; }
-    .error { color: #a32121; }
-    .success { color: #087048; }
-    .hint { font-size: .9rem; color: #48566b; }
-    .station-actions { display: flex; gap: .75rem; }
+    #qc-pass { background: var(--green); }
+    #qc-fail { background: var(--red); }
+    #status { min-height: 3rem; margin: .75rem 0 0; padding: .65rem .8rem; border-radius: .5rem; font-weight: 700; }
+    #status:empty { padding: 0; }
+    .error { background: var(--red-light); color: var(--red); }
+    .success { background: var(--green-light); color: var(--green); }
+    .hint { color: var(--text-secondary); font-size: .9rem; }
+    .station-actions { display: flex; gap: .75rem; margin-top: .5rem; }
     .station-actions button { min-height: 3rem; flex: 1; padding: .65rem; }
-    #change-team { background: #263d5a; color: white; }
-    #reset-station { background: #a32121; color: white; }
+    #change-team { background: var(--blue-deep); color: white; }
+    #reset-station { background: var(--orange-light); color: #833a13; }
     @media (max-width: 24rem) {
       .station-actions { flex-direction: column; }
     }
