@@ -31,7 +31,7 @@ Build and validate one user-facing slice at a time. The milestones below are a r
 
 ## Status
 
-The station screen supports all listed stations. A player can choose a team and station; these selections and a player ID are saved on the device. Completions are recorded for that player, and the screen shows their completion count for the selected team. Game timing, QC rules, and scoring are not implemented yet.
+The station screen supports all listed stations. A player can choose a team and station; these selections and a player ID are saved on the device. Completions are recorded for that player, and the screen shows that player's count for the selected station across teams. Game timing, QC rules, and scoring are not implemented yet.
 
 ## Run the station
 
@@ -41,6 +41,6 @@ For players on iPhones, run the server on a computer reachable on the same netwo
 
 ## Event integration
 
-`GET /api/stations` lists the station types; `POST /api/teams` with `{"name":"Team A"}` creates or joins a team, and `GET /api/teams` lists teams. `POST /api/events` records a completion with `{"id":"<UUID v4>","playerId":"<player UUID v4>","teamId":"<team id>","stationId":"cut-blister"}`. Reusing the same event ID for the same player, team, and station returns the existing event instead of counting it twice. `GET /api/events?teamId=<team id>` returns a team's recorded events, including player IDs. `GET /api/events/stream` publishes new completions as server-sent `completion` events; optionally filter with `?teamId=<team id>`. The stream delivers new events only, so use the events endpoint for history. There is no authentication or access control yet; use only on a trusted network.
+`GET /api/stations` lists the station types; `POST /api/teams` with `{"name":"Team A"}` creates or joins a team, and `GET /api/teams` lists teams. `POST /api/events` records a completion with `{"id":"<UUID v4>","playerId":"<player UUID v4>","teamId":"<team id>","stationId":"cut-blister"}`. Reusing the same event ID for the same player, team, and station returns the existing event instead of counting it twice. `GET /api/completions?playerId=<player UUID v4>&stationId=<station id>` returns that player's completion count for the station across teams. `GET /api/events?teamId=<team id>` returns a team's recorded events, including player IDs. `GET /api/events/stream` publishes new completions as server-sent `completion` events; optionally filter with `?teamId=<team id>`. The stream delivers new events only, so use the events endpoint for history. There is no authentication or access control yet; use only on a trusted network.
 
 Run the focused checks with `npm test`.

@@ -46,7 +46,27 @@ test('teams and completion events persist, stay isolated, and are idempotent', a
     assert.equal((await post(base, '/api/events', { ...event, id: randomUUID(), stationId: 'invalid' })).status, 400);
     assert.equal((await post(base, '/api/events', { ...event, id: randomUUID(), playerId: 'invalid' })).status, 400);
     assert.equal((await post(base, '/api/events', { ...event, id: randomUUID(), teamId: randomUUID() })).status, 404);
-    assert.equal((await (await fetch(`${base}/api/events?teamId=${otherTeam.id}`)).json()).length, 0);
+    await post(base, '/api/events', {
+      id: randomUUID(), playerId, teamId: otherTeam.id, stationId: 'affix-pills'
+    });
+    await post(base, '/api/events', {
+      id: randomUUID(), playerId, teamId: otherTeam.id, stationId: 'cut-blister'
+    });
+    const playerStationCount = await (await fetch(
+      `${base}/api/completions?playerId=${playerId}&stationId=affix-pills`
+    )).json();
+    const otherStationCount = await (await fetch(
+      `${base}/api/completions?playerId=${playerId}&stationId=cut-blister`
+    )).json();
+    const otherPlayerCount = await (await fetch(
+      `${base}/api/completions?playerId=${randomUUID()}&stationId=affix-pills`
+    )).json();
+    assert.equal(playerStationCount.count, 2);
+    assert.equal(otherStationCount.count, 1);
+    assert.equal(otherPlayerCount.count, 0);
+    assert.equal((await fetch(`${base}/api/completions?playerId=invalid&stationId=affix-pills`)).status, 400);
+    assert.equal((await fetch(`${base}/api/completions?playerId=${playerId}&stationId=invalid`)).status, 400);
+    assert.equal((await (await fetch(`${base}/api/events?teamId=${otherTeam.id}`)).json()).length, 2);
     await close();
     base = await start();
     const events = await (await fetch(`${base}/api/events?teamId=${team.id}`)).json();

@@ -62,6 +62,17 @@ function createApp(dataDir) {
       if (req.method === 'GET' && url.pathname === '/api/teams') {
         return json(res, 200, db.prepare('SELECT id, name FROM teams ORDER BY name').all());
       }
+      if (req.method === 'GET' && url.pathname === '/api/completions') {
+        const playerId = url.searchParams.get('playerId');
+        const stationId = url.searchParams.get('stationId');
+        if (!playerId || !uuid.test(playerId) || !stations.some(station => station.id === stationId)) {
+          return json(res, 400, { error: 'A valid player and station are required.' });
+        }
+        const { count } = db.prepare(
+          'SELECT COUNT(*) AS count FROM events WHERE player_id = ? AND station_id = ?'
+        ).get(playerId, stationId);
+        return json(res, 200, { count });
+      }
       if (req.method === 'POST' && url.pathname === '/api/teams') {
         const input = await body(req);
         const name = typeof input?.name === 'string' ? input.name.trim() : '';
