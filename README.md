@@ -31,4 +31,16 @@ Build and validate one user-facing slice at a time. The milestones below are a r
 
 ## Status
 
-This repository is at the planning stage. No gameplay UI or simulator behavior has been built yet.
+The first station slice records cut-blister completions. Other station pages, game timing, QC rules, and scoring are not implemented yet.
+
+## Run the station
+
+Install Node.js 22.13 or newer, then run `npm start`. Open `http://localhost:3000` in a browser, enter a team name, and tap **Complete** after cutting each index card. A confirmation means the event was recorded; if saving cannot be confirmed, tap **Retry** before continuing. Team names are shared and case-insensitive.
+
+For players on iPhones, run the server on a computer reachable on the same network and open `http://<computer-address>:3000` on each phone. Join the same team by name or share the team-specific page address (for example via a QR code). The server must remain running. SQLite data is stored in `data/` by default; set `DATA_DIR` to use another persistent directory and `PORT` to change the port. This standalone server is not yet a Vercel deployment; its database must reside on persistent storage.
+
+## Event integration
+
+`GET /api/stations` lists the station types; `POST /api/teams` with `{"name":"Team A"}` creates or joins a team, and `GET /api/teams` lists teams. `POST /api/events` records a completion with `{"id":"<UUID v4>","teamId":"<team id>","stationId":"cut-blister"}`. Reusing the same event ID for the same team and station returns the existing event instead of counting it twice. `GET /api/events?teamId=<team id>` returns a team's recorded events. `GET /api/events/stream` publishes new completions as server-sent `completion` events; optionally filter with `?teamId=<team id>`. The stream delivers new events only, so use the events endpoint for history. There is no authentication or access control yet; use only on a trusted network.
+
+Run the focused checks with `npm test`.
