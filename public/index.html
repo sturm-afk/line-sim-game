@@ -210,6 +210,7 @@
       eventSource = new EventSource(`/api/events/stream?teamId=${encodeURIComponent(team.id)}`);
       eventSource.addEventListener('completion', event => addCompletion(JSON.parse(event.data)));
       eventSource.addEventListener('reset', handleStationReset);
+      eventSource.addEventListener('round-reset', refreshCompletions);
       eventSource.addEventListener('game-reset', handleGameReset);
       eventSource.addEventListener('open', refreshCompletions);
     }

@@ -120,7 +120,7 @@ test('completion subscriptions deliver only matching team events', async () => {
   }
 });
 
-test('existing event databases gain player tracking without losing prior completions', async () => {
+test('existing databases gain event and timer columns without losing prior data', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-'));
   const teamId = randomUUID();
   const oldEventId = randomUUID();
@@ -131,10 +131,14 @@ test('existing event databases gain player tracking without losing prior complet
       id TEXT PRIMARY KEY, team_id TEXT NOT NULL REFERENCES teams(id),
       station_id TEXT NOT NULL, created_at TEXT NOT NULL
     );
+    CREATE TABLE timer (
+      id INTEGER PRIMARY KEY CHECK (id = 1), duration_seconds INTEGER NOT NULL, ends_at INTEGER
+    );
   `);
   database.prepare('INSERT INTO teams (id, name) VALUES (?, ?)').run(teamId, 'Legacy team');
   database.prepare('INSERT INTO events (id, team_id, station_id, created_at) VALUES (?, ?, ?, ?)')
     .run(oldEventId, teamId, 'cut-blister', new Date().toISOString());
+  database.prepare('INSERT INTO timer (id, duration_seconds, ends_at) VALUES (1, 120, NULL)').run();
   database.close();
 
   const server = createApp(dir);
@@ -146,6 +150,9 @@ test('existing event databases gain player tracking without losing prior complet
     assert.equal(events[0].id, oldEventId);
     assert.equal(events[0].playerId, null);
     assert.equal(events[0].result, null);
+    assert.deepEqual((await (await fetch(`${base}/api/scoreboard`)).json()).timer, {
+      durationSeconds: 120, endsAt: null, remainingSeconds: null
+    });
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
