@@ -31,8 +31,11 @@ function createApp(dataDir) {
     CREATE TABLE IF NOT EXISTS timer (
       id INTEGER PRIMARY KEY CHECK (id = 1), duration_seconds INTEGER NOT NULL, ends_at INTEGER
     );
-    INSERT OR IGNORE INTO timer (id, duration_seconds, ends_at) VALUES (1, 900, NULL);
   `);
+  if (!db.prepare('PRAGMA table_info(timer)').all().some(column => column.name === 'remaining_seconds')) {
+    db.exec('ALTER TABLE timer ADD COLUMN remaining_seconds INTEGER');
+  }
+  db.prepare('INSERT OR IGNORE INTO timer (id, duration_seconds, ends_at, remaining_seconds) VALUES (1, 900, NULL, NULL)').run();
   if (!db.prepare('PRAGMA table_info(events)').all().some(column => column.name === 'player_id')) {
     db.exec('ALTER TABLE events ADD COLUMN player_id TEXT');
   }
@@ -83,7 +86,8 @@ function createApp(dataDir) {
             SUM(CASE WHEN result = 'pass' THEN 1 ELSE 0 END) AS pass,
             SUM(CASE WHEN result = 'fail' THEN 1 ELSE 0 END) AS fail
             FROM events GROUP BY team_id, station_id`).all(),
-          timer: db.prepare('SELECT duration_seconds AS durationSeconds, ends_at AS endsAt FROM timer WHERE id = 1').get(),
+          timer: db.prepare(`SELECT duration_seconds AS durationSeconds, ends_at AS endsAt,
+            remaining_seconds AS remainingSeconds FROM timer WHERE id = 1`).get(),
           serverTime: Date.now()
         });
       }
@@ -92,15 +96,37 @@ function createApp(dataDir) {
         if (!Number.isInteger(input?.durationSeconds) || input.durationSeconds < 1 || input.durationSeconds > 86400) {
           return json(res, 400, { error: 'Duration must be between 1 and 86400 seconds.' });
         }
-        db.prepare('UPDATE timer SET duration_seconds = ?, ends_at = ? WHERE id = 1')
+        db.prepare('UPDATE timer SET duration_seconds = ?, ends_at = ?, remaining_seconds = NULL WHERE id = 1')
           .run(input.durationSeconds, Date.now() + input.durationSeconds * 1000);
         for (const subscriber of subscribers) {
           if (!subscriber.teamId) subscriber.res.write('event: timer\ndata: {}\n\n');
         }
         return json(res, 200, { ok: true });
       }
+      if (req.method === 'POST' && url.pathname === '/api/timer/stop') {
+        const timer = db.prepare('SELECT ends_at AS endsAt FROM timer WHERE id = 1').get();
+        const remainingSeconds = timer.endsAt === null ? null :
+          Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000));
+        db.prepare('UPDATE timer SET ends_at = NULL, remaining_seconds = ? WHERE id = 1').run(remainingSeconds);
+        for (const subscriber of subscribers) {
+          if (!subscriber.teamId) subscriber.res.write('event: timer\ndata: {}\n\n');
+        }
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/timer/resume') {
+        const timer = db.prepare('SELECT remaining_seconds AS remainingSeconds FROM timer WHERE id = 1').get();
+        if (timer.remainingSeconds === null || timer.remainingSeconds < 1) {
+          return json(res, 409, { error: 'There is no stopped timer to resume.' });
+        }
+        db.prepare('UPDATE timer SET ends_at = ?, remaining_seconds = NULL WHERE id = 1')
+          .run(Date.now() + timer.remainingSeconds * 1000);
+        for (const subscriber of subscribers) {
+          if (!subscriber.teamId) subscriber.res.write('event: timer\ndata: {}\n\n');
+        }
+        return json(res, 200, { ok: true });
+      }
       if (req.method === 'POST' && url.pathname === '/api/timer/reset') {
-        db.prepare('UPDATE timer SET ends_at = NULL WHERE id = 1').run();
+        db.prepare('UPDATE timer SET ends_at = NULL, remaining_seconds = NULL WHERE id = 1').run();
         for (const subscriber of subscribers) {
           if (!subscriber.teamId) subscriber.res.write('event: timer\ndata: {}\n\n');
         }
@@ -111,11 +137,18 @@ function createApp(dataDir) {
           BEGIN IMMEDIATE;
           DELETE FROM events;
           DELETE FROM teams;
-          UPDATE timer SET duration_seconds = 900, ends_at = NULL WHERE id = 1;
+          UPDATE timer SET duration_seconds = 900, ends_at = NULL, remaining_seconds = NULL WHERE id = 1;
           COMMIT;
         `);
         for (const subscriber of subscribers) {
           subscriber.res.write('event: game-reset\ndata: {}\n\n');
+        }
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/round/reset') {
+        db.prepare('DELETE FROM events').run();
+        for (const subscriber of subscribers) {
+          subscriber.res.write('event: round-reset\ndata: {}\n\n');
         }
         return json(res, 200, { ok: true });
       }
