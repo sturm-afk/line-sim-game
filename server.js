@@ -24,10 +24,13 @@ function createApp(dataDir) {
     CREATE TABLE IF NOT EXISTS teams (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE);
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY, team_id TEXT NOT NULL REFERENCES teams(id),
-      station_id TEXT NOT NULL, created_at TEXT NOT NULL
+      player_id TEXT, station_id TEXT NOT NULL, created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS events_team ON events(team_id);
   `);
+  if (!db.prepare('PRAGMA table_info(events)').all().some(column => column.name === 'player_id')) {
+    db.exec('ALTER TABLE events ADD COLUMN player_id TEXT');
+  }
   const subscribers = new Set();
   const page = readFileSync(path.join(__dirname, 'public', 'index.html'));
 
@@ -90,30 +93,34 @@ function createApp(dataDir) {
           return json(res, 404, { error: 'Team not found.' });
         }
         return json(res, 200, db.prepare(
-          'SELECT id, team_id AS teamId, station_id AS stationId, created_at AS createdAt FROM events WHERE team_id = ? ORDER BY rowid'
+          'SELECT id, team_id AS teamId, player_id AS playerId, station_id AS stationId, created_at AS createdAt FROM events WHERE team_id = ? ORDER BY rowid'
         ).all(teamId));
       }
       if (req.method === 'POST' && url.pathname === '/api/events') {
         const input = await body(req);
         if (!input || typeof input.id !== 'string' || !uuid.test(input.id) ||
-            typeof input.teamId !== 'string' || !stations.some(station => station.id === input.stationId)) {
-          return json(res, 400, { error: 'A valid event ID, team and station are required.' });
+            typeof input.teamId !== 'string' || typeof input.playerId !== 'string' || !uuid.test(input.playerId) ||
+            !stations.some(station => station.id === input.stationId)) {
+          return json(res, 400, { error: 'A valid event ID, player, team and station are required.' });
         }
         if (!db.prepare('SELECT id FROM teams WHERE id = ?').get(input.teamId)) {
           return json(res, 404, { error: 'Team not found.' });
         }
         const existing = db.prepare(
-          'SELECT id, team_id AS teamId, station_id AS stationId, created_at AS createdAt FROM events WHERE id = ?'
+          'SELECT id, team_id AS teamId, player_id AS playerId, station_id AS stationId, created_at AS createdAt FROM events WHERE id = ?'
         ).get(input.id);
         if (existing) {
-          if (existing.teamId !== input.teamId || existing.stationId !== input.stationId) {
+          if (existing.teamId !== input.teamId || existing.playerId !== input.playerId || existing.stationId !== input.stationId) {
             return json(res, 409, { error: 'Event ID already belongs to another completion.' });
           }
           return json(res, 200, existing);
         }
-        const event = { id: input.id, teamId: input.teamId, stationId: input.stationId, createdAt: new Date().toISOString() };
-        db.prepare('INSERT INTO events (id, team_id, station_id, created_at) VALUES (?, ?, ?, ?)')
-          .run(event.id, event.teamId, event.stationId, event.createdAt);
+        const event = {
+          id: input.id, teamId: input.teamId, playerId: input.playerId,
+          stationId: input.stationId, createdAt: new Date().toISOString()
+        };
+        db.prepare('INSERT INTO events (id, team_id, player_id, station_id, created_at) VALUES (?, ?, ?, ?, ?)')
+          .run(event.id, event.teamId, event.playerId, event.stationId, event.createdAt);
         for (const subscriber of subscribers) {
           if (!subscriber.teamId || subscriber.teamId === event.teamId) {
             subscriber.res.write(`event: completion\ndata: ${JSON.stringify(event)}\n\n`);

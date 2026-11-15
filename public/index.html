@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cut blister pack | Line Sim Game</title>
+  <title>Line Sim Game</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #f3f6fa; color: #172338; font: 18px system-ui, sans-serif; }
@@ -12,7 +12,7 @@
     p { line-height: 1.5; }
     label { display: block; font-weight: 600; margin-bottom: .5rem; }
     input, button { font: inherit; border-radius: .6rem; }
-    input { width: 100%; padding: .8rem; border: 1px solid #718096; }
+    input, select { width: 100%; padding: .8rem; border: 1px solid #718096; border-radius: .6rem; font: inherit; }
     button { cursor: pointer; border: 0; font-weight: 700; }
     button:disabled { opacity: .6; cursor: wait; }
     #join { margin-top: .75rem; padding: .8rem 1.25rem; background: #263d5a; color: white; }
@@ -26,16 +26,21 @@
 <body>
   <main>
     <p>Line Sim Game</p>
-    <h1>Cut blister pack</h1>
-    <p>Cut the index card in half, then tap Complete.</p>
+    <h1 id="station-title">Production station</h1>
+    <label for="station-select">Station</label>
+    <select id="station-select" disabled></select>
     <form id="team-form">
-      <label for="team-name">Team name</label>
-      <input id="team-name" name="team" maxlength="80" required autocomplete="off">
+      <label for="team-select">Select your team</label>
+      <select id="team-select">
+        <option value="">Choose an existing team</option>
+      </select>
+      <label for="team-name">Or enter a team name</label>
+      <input id="team-name" name="team" maxlength="80" autocomplete="off">
       <button id="join" type="submit">Join team</button>
     </form>
     <section id="station" hidden>
-      <p>Team: <strong id="team-label"></strong> · <span aria-live="polite"><strong id="completion-count">0</strong> completed at this station</span></p>
-      <p class="hint">Share this page’s address with teammates at this station.</p>
+      <p>Team: <strong id="team-label"></strong> · <span aria-live="polite">Your recorded completions for this team: <strong id="completion-count">0</strong></span></p>
+      <p class="hint">Your player, team, and station selections are saved on this device.</p>
       <button id="complete" type="button">Complete</button>
       <p id="status" role="status" aria-live="polite"></p>
       <button id="change-team" type="button">Change team</button>
@@ -44,7 +49,10 @@
   <script>
     const form = document.querySelector('#team-form');
     const teamName = document.querySelector('#team-name');
+    const teamSelect = document.querySelector('#team-select');
+    const stationSelect = document.querySelector('#station-select');
     const station = document.querySelector('#station');
+    const stationTitle = document.querySelector('#station-title');
     const label = document.querySelector('#team-label');
     const complete = document.querySelector('#complete');
     const status = document.querySelector('#status');
@@ -55,6 +63,14 @@
     let completionIds = new Set();
     let statusTimer = null;
     let eventSource = null;
+    let teams = [];
+    let stations = [];
+    let playerId = localStorage.getItem('line-sim-player-id');
+
+    if (!playerId) {
+      playerId = newId();
+      localStorage.setItem('line-sim-player-id', playerId);
+    }
 
     function showStatus(message, kind) {
       clearTimeout(statusTimer);
@@ -66,7 +82,7 @@
     }
 
     function addCompletion(event) {
-      if (event.teamId !== team?.id || event.stationId !== 'cut-blister') return;
+      if (event.teamId !== team?.id || event.playerId !== playerId) return;
       completionIds.add(event.id);
       completionCount.textContent = completionIds.size;
     }
@@ -85,6 +101,12 @@
       completionIds = new Set();
       completionCount.textContent = '0';
       label.textContent = team.name;
+      if (!teams.some(item => item.id === team.id)) {
+        teams.push(team);
+        teamSelect.add(new Option(team.name, team.id));
+      }
+      localStorage.setItem('line-sim-team-id', team.id);
+      teamSelect.value = team.id;
       form.hidden = true;
       station.hidden = false;
       const url = new URL(location.href);
@@ -94,6 +116,15 @@
       eventSource = new EventSource(`/api/events/stream?teamId=${encodeURIComponent(team.id)}`);
       eventSource.addEventListener('completion', event => addCompletion(JSON.parse(event.data)));
       eventSource.addEventListener('open', () => refreshCompletions(selected));
+    }
+
+    function selectStation(stationId) {
+      const selected = stations.find(item => item.id === stationId);
+      if (!selected) return;
+      stationSelect.value = selected.id;
+      stationTitle.textContent = selected.name;
+      document.title = `${selected.name} | Line Sim Game`;
+      localStorage.setItem('line-sim-station-id', selected.id);
     }
 
     async function request(url, options) {
@@ -111,14 +142,25 @@
       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     }
 
+    stationSelect.addEventListener('change', () => selectStation(stationSelect.value));
+    teamSelect.addEventListener('change', () => {
+      if (teamSelect.value) teamName.value = '';
+    });
+    teamName.addEventListener('input', () => {
+      if (teamName.value) teamSelect.value = '';
+    });
+
     form.addEventListener('submit', async event => {
       event.preventDefault();
       form.querySelector('button').disabled = true;
       try {
-        const selected = await request('/api/teams', {
+        const existing = teams.find(item => item.id === teamSelect.value);
+        const name = teamName.value.trim();
+        if (!name && !existing) throw new Error('Choose a team or enter a team name.');
+        const selected = name ? await request('/api/teams', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: teamName.value })
-        });
+          body: JSON.stringify({ name })
+        }) : existing;
         showTeam(selected);
       } catch (error) {
         alert(error.message || 'Could not join the team. Please try again.');
@@ -130,12 +172,15 @@
     complete.addEventListener('click', async () => {
       complete.disabled = true;
       changeTeam.disabled = true;
+      stationSelect.disabled = true;
       showStatus('Saving completion…');
       try {
         pendingId ||= newId();
         await request('/api/events', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: pendingId, teamId: team.id, stationId: 'cut-blister' })
+          body: JSON.stringify({
+            id: pendingId, playerId, teamId: team.id, stationId: stationSelect.value
+          })
         });
         pendingId = null;
         complete.textContent = 'Complete';
@@ -146,6 +191,7 @@
       } finally {
         complete.disabled = false;
         changeTeam.disabled = Boolean(pendingId);
+        stationSelect.disabled = Boolean(pendingId);
       }
     });
 
@@ -161,13 +207,19 @@
       history.replaceState(null, '', url);
     });
 
-    const teamId = new URL(location.href).searchParams.get('team');
-    if (teamId) {
-      request('/api/teams').then(teams => {
-        const selected = teams.find(item => item.id === teamId);
-        if (selected) showTeam(selected);
-      }).catch(() => {});
-    }
+    Promise.all([request('/api/stations'), request('/api/teams')]).then(([availableStations, availableTeams]) => {
+      stations = availableStations;
+      teams = availableTeams;
+      stations.forEach(item => stationSelect.add(new Option(item.name, item.id)));
+      teams.forEach(item => teamSelect.add(new Option(item.name, item.id)));
+      stationSelect.disabled = false;
+      const savedStation = localStorage.getItem('line-sim-station-id');
+      selectStation(stations.some(item => item.id === savedStation) ? savedStation : stations[0]?.id);
+      const urlTeamId = new URL(location.href).searchParams.get('team');
+      const savedTeamId = urlTeamId || localStorage.getItem('line-sim-team-id');
+      const selected = teams.find(item => item.id === savedTeamId);
+      if (selected) showTeam(selected);
+    }).catch(() => showStatus('Could not load teams and stations. Refresh to try again.', 'error'));
   </script>
 </body>
 </html>
