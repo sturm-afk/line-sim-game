@@ -65,9 +65,10 @@
     #completion-controls button { min-height: 6rem; padding: 1rem; color: white; font-size: 1.35rem; }
     #complete { position: relative; background: linear-gradient(115deg, var(--blue-deep), var(--blue)); box-shadow: 0 6px 16px rgb(7 59 92 / 18%); }
     #undo { background: #76502c; }
-    #complete.celebrate::after { content: '✦ 🎉 ✦'; position: absolute; inset: -1rem 0 auto; pointer-events: none; animation: confetti .8s ease-out forwards; }
+    #complete .confetti { display: none; position: absolute; inset: -1rem 0 auto; pointer-events: none; }
+    #complete.celebrate .confetti { display: block; animation: confetti .8s ease-out forwards; }
     @keyframes confetti { from { opacity: 1; transform: translateY(1rem) scale(.5); } to { opacity: 0; transform: translateY(-2rem) scale(1.3); } }
-    @media (prefers-reduced-motion: reduce) { #complete.celebrate::after { animation: none; } }
+    @media (prefers-reduced-motion: reduce) { #complete.celebrate .confetti { animation: none; } }
     #qc-controls { grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 1rem; }
     #qc-controls:not([hidden]) { display: grid; }
     #qc-controls button { min-height: 5rem; color: white; font-size: 1.3rem; }
@@ -109,7 +110,7 @@
       <p>Team: <strong id="team-label"></strong> · <span id="completion-summary" aria-live="polite">Your completions at this station: <strong id="completion-count">0</strong></span></p>
       <div id="completion-controls">
         <button id="undo" type="button" disabled>− Oops!</button>
-        <button id="complete" type="button">+ Done!</button>
+        <button id="complete" type="button"><span id="complete-label">+ Done!</span><span class="confetti" aria-hidden="true">✦ 🎉 ✦</span></button>
       </div>
       <div id="qc-controls" hidden>
         <button id="qc-pass" type="button">Pass <span id="qc-pass-count">0</span></button>
@@ -132,6 +133,7 @@
     const stationTitle = document.querySelector('#station-title');
     const label = document.querySelector('#team-label');
     const complete = document.querySelector('#complete');
+    const completeLabel = document.querySelector('#complete-label');
     const undo = document.querySelector('#undo');
     const completionControls = document.querySelector('#completion-controls');
     const menuToggle = document.querySelector('#menu-toggle');
@@ -154,6 +156,7 @@
     let lastEventId = null;
     let counterRequest = 0;
     let statusTimer = null;
+    let celebrationTimer = null;
     let eventSource = null;
     let teams = [];
     let stations = [];
@@ -358,15 +361,17 @@
         pendingId = null;
         pendingResult = null;
         refreshCompletions();
-        complete.textContent = '+ Done!';
+        completeLabel.textContent = '+ Done!';
         if (!result) {
+          clearTimeout(celebrationTimer);
           complete.classList.remove('celebrate');
           void complete.offsetWidth;
           complete.classList.add('celebrate');
+          celebrationTimer = setTimeout(() => complete.classList.remove('celebrate'), 800);
         }
         showStatus('Recorded. Ready for the next one!', 'success');
       } catch (error) {
-        if (!pendingResult) complete.textContent = 'Retry';
+        if (!pendingResult) completeLabel.textContent = 'Retry';
         showStatus(error.message || 'Could not confirm completion. Tap Retry before continuing.', 'error');
       } finally {
         complete.disabled = Boolean(pendingId) && Boolean(pendingResult);
