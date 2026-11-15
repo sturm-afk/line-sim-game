@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { mkdtempSync, rmSync } = require('node:fs');
+const { DatabaseSync } = require('node:sqlite');
 const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -34,13 +35,16 @@ test('teams and completion events persist, stay isolated, and are idempotent', a
     const sameTeam = await (await post(base, '/api/teams', { name: ' team a ' })).json();
     const otherTeam = await (await post(base, '/api/teams', { name: 'Team B' })).json();
     assert.equal(team.id, sameTeam.id);
-    const event = { id: randomUUID(), teamId: team.id, stationId: 'cut-blister' };
+    const playerId = randomUUID();
+    const event = { id: randomUUID(), playerId, teamId: team.id, stationId: 'affix-pills' };
     const responses = await Promise.all([
       post(base, '/api/events', event), post(base, '/api/events', event)
     ]);
     assert.deepEqual(responses.map(response => response.status).sort(), [200, 201]);
     assert.equal((await post(base, '/api/events', { ...event, teamId: otherTeam.id })).status, 409);
+    assert.equal((await post(base, '/api/events', { ...event, playerId: randomUUID() })).status, 409);
     assert.equal((await post(base, '/api/events', { ...event, id: randomUUID(), stationId: 'invalid' })).status, 400);
+    assert.equal((await post(base, '/api/events', { ...event, id: randomUUID(), playerId: 'invalid' })).status, 400);
     assert.equal((await post(base, '/api/events', { ...event, id: randomUUID(), teamId: randomUUID() })).status, 404);
     assert.equal((await (await fetch(`${base}/api/events?teamId=${otherTeam.id}`)).json()).length, 0);
     await close();
@@ -48,7 +52,8 @@ test('teams and completion events persist, stay isolated, and are idempotent', a
     const events = await (await fetch(`${base}/api/events?teamId=${team.id}`)).json();
     assert.equal(events.length, 1);
     assert.equal(events[0].id, event.id);
-    assert.equal(events[0].stationId, 'cut-blister');
+    assert.equal(events[0].stationId, 'affix-pills');
+    assert.equal(events[0].playerId, playerId);
     assert.ok(!Number.isNaN(Date.parse(events[0].createdAt)));
   } finally {
     if (server?.listening) await close();
@@ -64,19 +69,54 @@ test('completion subscriptions deliver only matching team events', async () => {
   const post = (route, data) => fetch(base + route, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
   });
+
   try {
     const team = await (await post('/api/teams', { name: 'A' })).json();
     const other = await (await post('/api/teams', { name: 'B' })).json();
     const stream = await fetch(`${base}/api/events/stream?teamId=${team.id}`);
     const reader = stream.body.getReader();
     await reader.read();
-    await post('/api/events', { id: randomUUID(), teamId: other.id, stationId: 'cut-blister' });
+    await post('/api/events', { id: randomUUID(), playerId: randomUUID(), teamId: other.id, stationId: 'cut-blister' });
     const id = randomUUID();
-    await post('/api/events', { id, teamId: team.id, stationId: 'cut-blister' });
+    const playerId = randomUUID();
+    await post('/api/events', { id, playerId, teamId: team.id, stationId: 'cut-blister' });
     const message = new TextDecoder().decode((await reader.read()).value);
     assert.match(message, /event: completion/);
     assert.equal(JSON.parse(message.split('data: ')[1]).id, id);
+    assert.equal(JSON.parse(message.split('data: ')[1]).playerId, playerId);
     await reader.cancel();
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('existing event databases gain player tracking without losing prior completions', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-'));
+  const teamId = randomUUID();
+  const oldEventId = randomUUID();
+  const database = new DatabaseSync(path.join(dir, 'line-sim.sqlite'));
+  database.exec(`
+    CREATE TABLE teams (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE);
+    CREATE TABLE events (
+      id TEXT PRIMARY KEY, team_id TEXT NOT NULL REFERENCES teams(id),
+      station_id TEXT NOT NULL, created_at TEXT NOT NULL
+    );
+  `);
+  database.prepare('INSERT INTO teams (id, name) VALUES (?, ?)').run(teamId, 'Legacy team');
+  database.prepare('INSERT INTO events (id, team_id, station_id, created_at) VALUES (?, ?, ?, ?)')
+    .run(oldEventId, teamId, 'cut-blister', new Date().toISOString());
+  database.close();
+
+  const server = createApp(dir);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const events = await (await fetch(`${base}/api/events?teamId=${teamId}`)).json();
+    assert.equal(events.length, 1);
+    assert.equal(events[0].id, oldEventId);
+    assert.equal(events[0].playerId, null);
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
