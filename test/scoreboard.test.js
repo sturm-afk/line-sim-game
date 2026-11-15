@@ -37,7 +37,10 @@ test('scoreboard snapshots and live updates include all teams, stations and the 
     const other = await (await post(base, '/api/teams', { name: 'Team B' })).json();
     await next('team');
     const event = { id: randomUUID(), playerId: randomUUID(), teamId: team.id, stationId: 'inspect-box', result: 'pass' };
-    await post(base, '/api/events', event);
+    assert.equal((await post(base, '/api/events', event)).status, 409);
+    assert.equal((await post(base, '/api/timer', { durationSeconds: 900 })).status, 200);
+    await next('timer');
+    assert.equal((await post(base, '/api/events', event)).status, 201);
     await next('completion');
     await post(base, '/api/events', event);
     await post(base, '/api/events', { ...event, id: randomUUID(), result: 'fail' });
@@ -52,7 +55,8 @@ test('scoreboard snapshots and live updates include all teams, stations and the 
     });
     assert.equal(snapshot.counts.find(item => item.stationId === 'cut-box').count, 1);
     assert.equal(snapshot.counts.some(item => item.teamId === other.id), false);
-    assert.deepEqual(snapshot.timer, { durationSeconds: 900, endsAt: null });
+    assert.equal(snapshot.timer.durationSeconds, 900);
+    assert.ok(snapshot.timer.endsAt > snapshot.serverTime);
     for (const durationSeconds of [0, -1, 86401, 1.5, '5']) {
       assert.equal((await post(base, '/api/timer', { durationSeconds })).status, 400);
     }
@@ -75,6 +79,54 @@ test('scoreboard snapshots and live updates include all teams, stations and the 
     assert.equal((await post(base, '/api/timer/reset', {})).status, 200);
     snapshot = await (await fetch(base + '/api/scoreboard')).json();
     assert.deepEqual(snapshot.timer, { durationSeconds: 60, endsAt: null });
+  } finally {
+    if (server?.listening) await close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('reset game deletes teams and completions, stops the timer and notifies connected screens', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-game-reset-'));
+  let server;
+  async function start() {
+    server = createApp(dir);
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    return `http://127.0.0.1:${server.address().port}`;
+  }
+  async function close() {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+  const post = (base, route, data = {}) => fetch(base + route, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  try {
+    const base = await start();
+    const stream = await fetch(base + '/api/events/stream');
+    const reader = stream.body.getReader();
+    await reader.read();
+    const next = async type => {
+      const message = new TextDecoder().decode((await reader.read()).value);
+      assert.match(message, new RegExp(`event: ${type}`));
+      return JSON.parse(message.split('data: ')[1]);
+    };
+    const team = await (await post(base, '/api/teams', { name: 'Reset me' })).json();
+    await next('team');
+    await post(base, '/api/timer', { durationSeconds: 60 });
+    await next('timer');
+    await post(base, '/api/events', {
+      id: randomUUID(), playerId: randomUUID(), teamId: team.id, stationId: 'cut-blister'
+    });
+    await next('completion');
+
+    assert.equal((await post(base, '/api/game/reset')).status, 200);
+    await next('game-reset');
+    const snapshot = await (await fetch(base + '/api/scoreboard')).json();
+    assert.deepEqual(snapshot.teams, []);
+    assert.deepEqual(snapshot.counts, []);
+    assert.deepEqual(snapshot.timer, { durationSeconds: 900, endsAt: null });
+    assert.equal((await fetch(`${base}/api/events?teamId=${team.id}`)).status, 404);
+    await reader.cancel();
   } finally {
     if (server?.listening) await close();
     rmSync(dir, { recursive: true, force: true });

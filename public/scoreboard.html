@@ -25,8 +25,7 @@
     .page-header { margin: 0 0 1.5rem; color: white; }
     .brand { margin: 0 0 .25rem; color: #d1e8f1; font-size: .8rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
     h1 { margin: 0 0 .35rem; font-size: clamp(1.8rem, 3vw, 3rem); line-height: 1.15; }
-    a { color: #d1e8f1; font-weight: 650; text-underline-offset: .2em; }
-    a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #f0a15c; outline-offset: 3px; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #f0a15c; outline-offset: 3px; }
     .clock { margin: 1.5rem 0 1rem; padding: clamp(1rem, 3vw, 2rem); border: 1px solid rgb(255 255 255 / 55%); border-radius: 1rem; background: linear-gradient(145deg, #fff, #f3f6f8); box-shadow: var(--shadow); text-align: center; }
     #countdown { color: var(--blue-deep); font-size: clamp(4rem, 12vw, 10rem); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1; }
     #timer-state { margin: .5rem 0 1rem; color: var(--text-secondary); font-size: 1.25rem; font-weight: 700; }
@@ -37,6 +36,7 @@
     button { border-color: transparent; background: var(--orange); color: white; font-weight: 750; cursor: pointer; }
     button:hover { filter: brightness(1.08); }
     #reset { border-color: var(--border); background: var(--blue-light); color: var(--blue-deep); }
+    #reset-game { margin-top: .75rem; background: #8f261e; }
     #status { min-height: 1.5em; margin: .5rem 0 1rem; color: #fff0d9; font-weight: 700; text-align: center; }
     .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: .9rem; background: var(--card); box-shadow: var(--shadow); }
     table { width: 100%; min-width: 54rem; border-collapse: collapse; font-size: clamp(1rem, 1.4vw, 1.4rem); }
@@ -63,7 +63,6 @@
     <header class="page-header">
       <p class="brand">VitaNova MES</p>
       <h1>Production scoreboard</h1>
-      <a href="/">Station screen</a>
     </header>
     <section class="clock" aria-label="Countdown">
       <div id="countdown">--:--</div>
@@ -75,6 +74,7 @@
         <button type="submit">Start / restart</button>
         <button id="reset" type="button">Reset timer</button>
       </form>
+      <button id="reset-game" type="button">Reset game</button>
     </section>
     <p id="status" role="status"></p>
     <div class="table-wrap">
@@ -206,10 +206,20 @@
     document.querySelector('#reset').addEventListener('click', () => {
       updateTimer('/api/timer/reset', { method: 'POST' });
     });
+    document.querySelector('#reset-game').addEventListener('click', async () => {
+      if (!confirm('Reset the entire game? This will delete all teams and completions and stop the timer. This cannot be undone.')) return;
+      try {
+        const response = await fetch('/api/game/reset', { method: 'POST' });
+        if (!response.ok) throw new Error('Request failed');
+        refresh();
+      } catch {
+        status.textContent = 'Could not reset the game. Please try again.';
+      }
+    });
     const stream = new EventSource('/api/events/stream');
     stream.addEventListener('open', () => { connected = true; showStatus(); refresh(); });
     stream.addEventListener('error', () => { connected = false; showStatus(); });
-    for (const type of ['team', 'completion', 'reset', 'timer']) stream.addEventListener(type, refresh);
+    for (const type of ['team', 'completion', 'reset', 'timer', 'game-reset']) stream.addEventListener(type, refresh);
     setInterval(renderClock, 250);
     refresh();
   </script>
