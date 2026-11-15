@@ -137,6 +137,58 @@ test('existing event databases gain player tracking without losing prior complet
     assert.equal(events.length, 1);
     assert.equal(events[0].id, oldEventId);
     assert.equal(events[0].playerId, null);
+    assert.equal(events[0].result, null);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('QC pass and fail results are counted by team and station', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-'));
+  const server = createApp(dir);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (route, data) => fetch(base + route, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+
+  try {
+    const team = await (await post('/api/teams', { name: 'QC team' })).json();
+    const otherTeam = await (await post('/api/teams', { name: 'Other team' })).json();
+    const playerId = randomUUID();
+    const qcEvent = (teamId, stationId, result) => ({
+      id: randomUUID(), playerId, teamId, stationId, result
+    });
+
+    assert.equal((await post('/api/events', qcEvent(team.id, 'inspect-blister'))).status, 400);
+    assert.equal((await post('/api/events', qcEvent(team.id, 'inspect-blister', 'hold'))).status, 400);
+    assert.equal((await post('/api/events', qcEvent(team.id, 'cut-blister', 'pass'))).status, 400);
+
+    const pass = qcEvent(team.id, 'inspect-blister', 'pass');
+    assert.equal((await post('/api/events', pass)).status, 201);
+    assert.equal((await post('/api/events', pass)).status, 200);
+    assert.equal((await post('/api/events', { ...pass, result: 'fail' })).status, 409);
+    assert.equal((await post('/api/events', qcEvent(team.id, 'inspect-blister', 'fail'))).status, 201);
+    assert.equal((await post('/api/events', qcEvent(team.id, 'inspect-box', 'pass'))).status, 201);
+    assert.equal((await post('/api/events', qcEvent(otherTeam.id, 'inspect-blister', 'fail'))).status, 201);
+
+    assert.deepEqual(await (await fetch(
+      `${base}/api/qc-counts?teamId=${team.id}&stationId=inspect-blister`
+    )).json(), { pass: 1, fail: 1 });
+    assert.deepEqual(await (await fetch(
+      `${base}/api/qc-counts?teamId=${team.id}&stationId=inspect-box`
+    )).json(), { pass: 1, fail: 0 });
+    assert.deepEqual(await (await fetch(
+      `${base}/api/qc-counts?teamId=${otherTeam.id}&stationId=inspect-blister`
+    )).json(), { pass: 0, fail: 1 });
+    assert.equal((await fetch(
+      `${base}/api/qc-counts?teamId=${team.id}&stationId=cut-blister`
+    )).status, 400);
+    const events = await (await fetch(`${base}/api/events?teamId=${team.id}`)).json();
+    assert.equal(events[0].result, 'pass');
+    assert.equal(events[1].result, 'fail');
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));

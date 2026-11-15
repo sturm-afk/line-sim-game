@@ -17,6 +17,11 @@
     button:disabled { opacity: .6; cursor: wait; }
     #join { margin-top: .75rem; padding: .8rem 1.25rem; background: #263d5a; color: white; }
     #complete { width: 100%; min-height: 8rem; margin-top: 1rem; padding: 1.5rem; background: #087c57; color: white; font-size: 1.6rem; }
+    #qc-controls { grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 1rem; }
+    #qc-controls:not([hidden]) { display: grid; }
+    #qc-controls button { min-height: 5rem; color: white; font-size: 1.3rem; }
+    #qc-pass { background: #087c57; }
+    #qc-fail { background: #a32121; }
     #status { min-height: 3rem; font-weight: 600; }
     .error { color: #a32121; }
     .success { color: #087048; }
@@ -39,9 +44,13 @@
       <button id="join" type="submit">Join team</button>
     </form>
     <section id="station" hidden>
-      <p>Team: <strong id="team-label"></strong> · <span aria-live="polite">Your completions at this station: <strong id="completion-count">0</strong></span></p>
+      <p>Team: <strong id="team-label"></strong> · <span id="completion-summary" aria-live="polite">Your completions at this station: <strong id="completion-count">0</strong></span></p>
       <p class="hint">Your player, team, and station selections are saved on this device.</p>
       <button id="complete" type="button">Complete</button>
+      <div id="qc-controls" hidden>
+        <button id="qc-pass" type="button">Pass <span id="qc-pass-count">0</span></button>
+        <button id="qc-fail" type="button">Fail <span id="qc-fail-count">0</span></button>
+      </div>
       <p id="status" role="status" aria-live="polite"></p>
       <button id="change-team" type="button">Change team</button>
     </section>
@@ -55,16 +64,24 @@
     const stationTitle = document.querySelector('#station-title');
     const label = document.querySelector('#team-label');
     const complete = document.querySelector('#complete');
+    const completionSummary = document.querySelector('#completion-summary');
+    const qcControls = document.querySelector('#qc-controls');
+    const qcPass = document.querySelector('#qc-pass');
+    const qcFail = document.querySelector('#qc-fail');
+    const qcPassCount = document.querySelector('#qc-pass-count');
+    const qcFailCount = document.querySelector('#qc-fail-count');
     const status = document.querySelector('#status');
     const completionCount = document.querySelector('#completion-count');
     const changeTeam = document.querySelector('#change-team');
     let team = null;
     let pendingId = null;
+    let pendingResult = null;
     let counterRequest = 0;
     let statusTimer = null;
     let eventSource = null;
     let teams = [];
     let stations = [];
+    const qcStationIds = ['inspect-blister', 'inspect-box'];
     let playerId = localStorage.getItem('line-sim-player-id');
 
     if (!playerId) {
@@ -82,19 +99,37 @@
     }
 
     function addCompletion(event) {
-      if (event.playerId !== playerId || event.stationId !== stationSelect.value) return;
-      refreshCompletions();
+      if (event.teamId !== team?.id || event.stationId !== stationSelect.value) return;
+      if (event.playerId === playerId) refreshCompletions();
+      else if (event.result) refreshQcCounts();
     }
 
     async function refreshCompletions() {
       const selectedStationId = stationSelect.value;
       const requestId = ++counterRequest;
       try {
+        if (qcStationIds.includes(selectedStationId)) {
+          await refreshQcCounts(requestId);
+          return;
+        }
         const result = await request(
           `/api/completions?playerId=${encodeURIComponent(playerId)}&stationId=${encodeURIComponent(selectedStationId)}`
         );
         if (requestId !== counterRequest || stationSelect.value !== selectedStationId) return;
         completionCount.textContent = result.count;
+      } catch {}
+    }
+
+    async function refreshQcCounts(requestId = ++counterRequest) {
+      const selectedStationId = stationSelect.value;
+      if (!team || !qcStationIds.includes(selectedStationId)) return;
+      try {
+        const result = await request(
+          `/api/qc-counts?teamId=${encodeURIComponent(team.id)}&stationId=${encodeURIComponent(selectedStationId)}`
+        );
+        if (requestId !== counterRequest || stationSelect.value !== selectedStationId) return;
+        qcPassCount.textContent = result.pass;
+        qcFailCount.textContent = result.fail;
       } catch {}
     }
 
@@ -125,6 +160,10 @@
       stationSelect.value = selected.id;
       stationTitle.textContent = selected.name;
       document.title = `${selected.name} | Line Sim Game`;
+      const isQcStation = qcStationIds.includes(selected.id);
+      completionSummary.hidden = isQcStation;
+      complete.hidden = isQcStation;
+      qcControls.hidden = !isQcStation;
       localStorage.setItem('line-sim-station-id', selected.id);
       if (team) refreshCompletions();
     }
@@ -171,32 +210,44 @@
       }
     });
 
-    complete.addEventListener('click', async () => {
-      complete.disabled = true;
+    async function recordCompletion(result) {
+      const buttons = [complete, qcPass, qcFail];
+      if (!pendingId) {
+        pendingId = newId();
+        pendingResult = result;
+      }
+      buttons.forEach(button => { button.disabled = true; });
       changeTeam.disabled = true;
       stationSelect.disabled = true;
-      showStatus('Saving completion…');
+      showStatus(pendingResult ? `Saving ${pendingResult}…` : 'Saving completion…');
       try {
-        pendingId ||= newId();
         await request('/api/events', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: pendingId, playerId, teamId: team.id, stationId: stationSelect.value
+            id: pendingId, playerId, teamId: team.id, stationId: stationSelect.value,
+            ...(pendingResult ? { result: pendingResult } : {})
           })
         });
         pendingId = null;
+        pendingResult = null;
         refreshCompletions();
         complete.textContent = 'Complete';
-        showStatus('Completed and recorded. Ready for the next one!', 'success');
+        showStatus('Recorded. Ready for the next one!', 'success');
       } catch (error) {
-        complete.textContent = 'Retry';
+        if (!pendingResult) complete.textContent = 'Retry';
         showStatus('Could not confirm completion. Tap Retry before continuing.', 'error');
       } finally {
-        complete.disabled = false;
+        complete.disabled = Boolean(pendingId) && Boolean(pendingResult);
+        qcPass.disabled = Boolean(pendingId) && pendingResult !== 'pass';
+        qcFail.disabled = Boolean(pendingId) && pendingResult !== 'fail';
         changeTeam.disabled = Boolean(pendingId);
         stationSelect.disabled = Boolean(pendingId);
       }
-    });
+    }
+
+    complete.addEventListener('click', () => recordCompletion(null));
+    qcPass.addEventListener('click', () => recordCompletion('pass'));
+    qcFail.addEventListener('click', () => recordCompletion('fail'));
 
     changeTeam.addEventListener('click', () => {
       eventSource?.close();
