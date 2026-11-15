@@ -28,6 +28,10 @@ function createApp(dataDir) {
       player_id TEXT, station_id TEXT NOT NULL, result TEXT, created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS events_team ON events(team_id);
+    CREATE TABLE IF NOT EXISTS timer (
+      id INTEGER PRIMARY KEY CHECK (id = 1), duration_seconds INTEGER NOT NULL, ends_at INTEGER
+    );
+    INSERT OR IGNORE INTO timer (id, duration_seconds, ends_at) VALUES (1, 900, NULL);
   `);
   if (!db.prepare('PRAGMA table_info(events)').all().some(column => column.name === 'player_id')) {
     db.exec('ALTER TABLE events ADD COLUMN player_id TEXT');
@@ -37,6 +41,7 @@ function createApp(dataDir) {
   }
   const subscribers = new Set();
   const page = readFileSync(path.join(__dirname, 'public', 'index.html'));
+  const scoreboardPage = readFileSync(path.join(__dirname, 'public', 'scoreboard.html'));
 
   function json(res, status, value) {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -62,9 +67,44 @@ function createApp(dataDir) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(page);
       }
+      if (req.method === 'GET' && url.pathname === '/scoreboard') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(scoreboardPage);
+      }
       if (req.method === 'GET' && url.pathname === '/api/stations') return json(res, 200, stations);
       if (req.method === 'GET' && url.pathname === '/api/teams') {
         return json(res, 200, db.prepare('SELECT id, name FROM teams ORDER BY name').all());
+      }
+      if (req.method === 'GET' && url.pathname === '/api/scoreboard') {
+        return json(res, 200, {
+          stations,
+          teams: db.prepare('SELECT id, name FROM teams ORDER BY name').all(),
+          counts: db.prepare(`SELECT team_id AS teamId, station_id AS stationId, COUNT(*) AS count,
+            SUM(CASE WHEN result = 'pass' THEN 1 ELSE 0 END) AS pass,
+            SUM(CASE WHEN result = 'fail' THEN 1 ELSE 0 END) AS fail
+            FROM events GROUP BY team_id, station_id`).all(),
+          timer: db.prepare('SELECT duration_seconds AS durationSeconds, ends_at AS endsAt FROM timer WHERE id = 1').get(),
+          serverTime: Date.now()
+        });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/timer') {
+        const input = await body(req);
+        if (!Number.isInteger(input?.durationSeconds) || input.durationSeconds < 1 || input.durationSeconds > 86400) {
+          return json(res, 400, { error: 'Duration must be between 1 and 86400 seconds.' });
+        }
+        db.prepare('UPDATE timer SET duration_seconds = ?, ends_at = ? WHERE id = 1')
+          .run(input.durationSeconds, Date.now() + input.durationSeconds * 1000);
+        for (const subscriber of subscribers) {
+          if (!subscriber.teamId) subscriber.res.write('event: timer\ndata: {}\n\n');
+        }
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/timer/reset') {
+        db.prepare('UPDATE timer SET ends_at = NULL WHERE id = 1').run();
+        for (const subscriber of subscribers) {
+          if (!subscriber.teamId) subscriber.res.write('event: timer\ndata: {}\n\n');
+        }
+        return json(res, 200, { ok: true });
       }
       if (req.method === 'GET' && url.pathname === '/api/completions') {
         const playerId = url.searchParams.get('playerId');
@@ -100,8 +140,14 @@ function createApp(dataDir) {
         if (!name || name.length > 80 || /[\x00-\x1f\x7f]/.test(name)) {
           return json(res, 400, { error: 'Enter a team name of 1–80 characters.' });
         }
-        db.prepare('INSERT OR IGNORE INTO teams (id, name) VALUES (?, ?)').run(randomUUID(), name);
-        return json(res, 200, db.prepare('SELECT id, name FROM teams WHERE name = ? COLLATE NOCASE').get(name));
+        const { changes } = db.prepare('INSERT OR IGNORE INTO teams (id, name) VALUES (?, ?)').run(randomUUID(), name);
+        const team = db.prepare('SELECT id, name FROM teams WHERE name = ? COLLATE NOCASE').get(name);
+        if (changes) {
+          for (const subscriber of subscribers) {
+            if (!subscriber.teamId) subscriber.res.write(`event: team\ndata: ${JSON.stringify(team)}\n\n`);
+          }
+        }
+        return json(res, 200, team);
       }
       if (req.method === 'POST' && url.pathname === '/api/station-reset') {
         const input = await body(req);
