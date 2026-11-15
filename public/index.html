@@ -39,7 +39,7 @@
       <button id="join" type="submit">Join team</button>
     </form>
     <section id="station" hidden>
-      <p>Team: <strong id="team-label"></strong> · <span aria-live="polite">Your recorded completions for this team: <strong id="completion-count">0</strong></span></p>
+      <p>Team: <strong id="team-label"></strong> · <span aria-live="polite">Your completions at this station: <strong id="completion-count">0</strong></span></p>
       <p class="hint">Your player, team, and station selections are saved on this device.</p>
       <button id="complete" type="button">Complete</button>
       <p id="status" role="status" aria-live="polite"></p>
@@ -60,7 +60,7 @@
     const changeTeam = document.querySelector('#change-team');
     let team = null;
     let pendingId = null;
-    let completionIds = new Set();
+    let counterRequest = 0;
     let statusTimer = null;
     let eventSource = null;
     let teams = [];
@@ -82,24 +82,25 @@
     }
 
     function addCompletion(event) {
-      if (event.teamId !== team?.id || event.playerId !== playerId) return;
-      completionIds.add(event.id);
-      completionCount.textContent = completionIds.size;
+      if (event.playerId !== playerId || event.stationId !== stationSelect.value) return;
+      refreshCompletions();
     }
 
-    async function refreshCompletions(selected) {
+    async function refreshCompletions() {
+      const selectedStationId = stationSelect.value;
+      const requestId = ++counterRequest;
       try {
-        const events = await request(`/api/events?teamId=${encodeURIComponent(selected.id)}`);
-        if (team?.id !== selected.id) return;
-        events.forEach(addCompletion);
+        const result = await request(
+          `/api/completions?playerId=${encodeURIComponent(playerId)}&stationId=${encodeURIComponent(selectedStationId)}`
+        );
+        if (requestId !== counterRequest || stationSelect.value !== selectedStationId) return;
+        completionCount.textContent = result.count;
       } catch {}
     }
 
     function showTeam(selected) {
       eventSource?.close();
       team = selected;
-      completionIds = new Set();
-      completionCount.textContent = '0';
       label.textContent = team.name;
       if (!teams.some(item => item.id === team.id)) {
         teams.push(team);
@@ -112,10 +113,10 @@
       const url = new URL(location.href);
       url.searchParams.set('team', team.id);
       history.replaceState(null, '', url);
-      refreshCompletions(selected);
+      refreshCompletions();
       eventSource = new EventSource(`/api/events/stream?teamId=${encodeURIComponent(team.id)}`);
       eventSource.addEventListener('completion', event => addCompletion(JSON.parse(event.data)));
-      eventSource.addEventListener('open', () => refreshCompletions(selected));
+      eventSource.addEventListener('open', refreshCompletions);
     }
 
     function selectStation(stationId) {
@@ -125,6 +126,7 @@
       stationTitle.textContent = selected.name;
       document.title = `${selected.name} | Line Sim Game`;
       localStorage.setItem('line-sim-station-id', selected.id);
+      if (team) refreshCompletions();
     }
 
     async function request(url, options) {
@@ -183,6 +185,7 @@
           })
         });
         pendingId = null;
+        refreshCompletions();
         complete.textContent = 'Complete';
         showStatus('Completed and recorded. Ready for the next one!', 'success');
       } catch (error) {
