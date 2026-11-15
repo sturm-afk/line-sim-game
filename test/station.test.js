@@ -34,6 +34,7 @@ test('teams and completion events persist, stay isolated, and are idempotent', a
     const team = await (await post(base, '/api/teams', { name: 'Team A' })).json();
     const sameTeam = await (await post(base, '/api/teams', { name: ' team a ' })).json();
     const otherTeam = await (await post(base, '/api/teams', { name: 'Team B' })).json();
+    await post(base, '/api/timer', { durationSeconds: 900 });
     assert.equal(team.id, sameTeam.id);
     const playerId = randomUUID();
     const event = { id: randomUUID(), playerId, teamId: team.id, stationId: 'affix-pills' };
@@ -93,6 +94,7 @@ test('completion subscriptions deliver only matching team events', async () => {
   try {
     const team = await (await post('/api/teams', { name: 'A' })).json();
     const other = await (await post('/api/teams', { name: 'B' })).json();
+    await post('/api/timer', { durationSeconds: 900 });
     const stream = await fetch(`${base}/api/events/stream?teamId=${team.id}`);
     const reader = stream.body.getReader();
     await reader.read();
@@ -163,6 +165,7 @@ test('QC pass and fail results are counted by team and station', async () => {
   try {
     const team = await (await post('/api/teams', { name: 'QC team' })).json();
     const otherTeam = await (await post('/api/teams', { name: 'Other team' })).json();
+    await post('/api/timer', { durationSeconds: 900 });
     const playerId = randomUUID();
     const qcEvent = (teamId, stationId, result) => ({
       id: randomUUID(), playerId, teamId, stationId, result
@@ -214,6 +217,7 @@ test('station reset deletes only the selected team and station completions', asy
   try {
     const team = await (await post('/api/teams', { name: 'Reset team' })).json();
     const otherTeam = await (await post('/api/teams', { name: 'Other reset team' })).json();
+    await post('/api/timer', { durationSeconds: 900 });
     const playerId = randomUUID();
     const addCompletion = (teamId, stationId) => post('/api/events', {
       id: randomUUID(), playerId, teamId, stationId
@@ -241,6 +245,45 @@ test('station reset deletes only the selected team and station completions', asy
     assert.equal((await post('/api/station-reset', {
       teamId: randomUUID(), stationId: 'cut-blister'
     })).status, 404);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('new completions require an active timer and stop when it is reset or expires', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-timer-gate-'));
+  const server = createApp(dir);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (route, data = {}) => fetch(base + route, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+
+  try {
+    const team = await (await post('/api/teams', { name: 'Timed team' })).json();
+    const playerId = randomUUID();
+    const event = stationId => ({
+      id: randomUUID(), playerId, teamId: team.id, stationId
+    });
+    const beforeStart = event('cut-blister');
+    assert.equal((await post('/api/events', beforeStart)).status, 409);
+
+    await post('/api/timer', { durationSeconds: 60 });
+    assert.equal((await post('/api/events', beforeStart)).status, 201);
+    await post('/api/timer/reset');
+    assert.equal((await post('/api/events', beforeStart)).status, 200);
+    assert.equal((await post('/api/events', event('cut-blister'))).status, 409);
+
+    await post('/api/timer', { durationSeconds: 60 });
+    const database = new DatabaseSync(path.join(dir, 'line-sim.sqlite'));
+    database.prepare('UPDATE timer SET ends_at = ? WHERE id = 1').run(Date.now() - 1);
+    database.close();
+    assert.equal((await post('/api/events', event('cut-box'))).status, 409);
+    assert.equal((await (await fetch(
+      `${base}/api/completions?playerId=${playerId}&stationId=cut-blister`
+    )).json()).count, 1);
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));

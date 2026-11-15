@@ -106,6 +106,19 @@ function createApp(dataDir) {
         }
         return json(res, 200, { ok: true });
       }
+      if (req.method === 'POST' && url.pathname === '/api/game/reset') {
+        db.exec(`
+          BEGIN IMMEDIATE;
+          DELETE FROM events;
+          DELETE FROM teams;
+          UPDATE timer SET duration_seconds = 900, ends_at = NULL WHERE id = 1;
+          COMMIT;
+        `);
+        for (const subscriber of subscribers) {
+          subscriber.res.write('event: game-reset\ndata: {}\n\n');
+        }
+        return json(res, 200, { ok: true });
+      }
       if (req.method === 'GET' && url.pathname === '/api/completions') {
         const playerId = url.searchParams.get('playerId');
         const stationId = url.searchParams.get('stationId');
@@ -215,6 +228,10 @@ function createApp(dataDir) {
             return json(res, 409, { error: 'Event ID already belongs to another completion.' });
           }
           return json(res, 200, existing);
+        }
+        const { ends_at: endsAt } = db.prepare('SELECT ends_at FROM timer WHERE id = 1').get();
+        if (endsAt === null || endsAt <= Date.now()) {
+          return json(res, 409, { error: 'The game is not active.' });
         }
         const event = {
           id: input.id, teamId: input.teamId, playerId: input.playerId,
