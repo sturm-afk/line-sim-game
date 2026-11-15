@@ -120,6 +120,50 @@ test('completion subscriptions deliver only matching team events', async () => {
   }
 });
 
+test('undo removes only the selected player completion and is safe to retry', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-undo-'));
+  const server = createApp(dir);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (route, data = {}) => fetch(base + route, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  try {
+    const team = await (await post('/api/teams', { name: 'Undo team' })).json();
+    const otherTeam = await (await post('/api/teams', { name: 'Other team' })).json();
+    const playerId = randomUUID();
+    const event = { id: randomUUID(), playerId, teamId: team.id, stationId: 'cut-blister' };
+    await post('/api/timer', { durationSeconds: 60 });
+    await post('/api/events', event);
+    await post('/api/events', { ...event, id: randomUUID(), teamId: otherTeam.id });
+    const countUrl = `${base}/api/completions?playerId=${playerId}&stationId=cut-blister&teamId=${team.id}`;
+    assert.deepEqual(await (await fetch(countUrl)).json(), { count: 1, lastEventId: event.id });
+    assert.equal((await post('/api/completion-undo', { ...event, playerId: randomUUID() })).status, 409);
+    assert.equal((await post('/api/completion-undo', { ...event, stationId: 'inspect-box' })).status, 400);
+    const stream = await fetch(`${base}/api/events/stream?teamId=${team.id}`);
+    const reader = stream.body.getReader();
+    await reader.read();
+    await post('/api/timer/reset');
+    assert.equal((await post('/api/completion-undo', event)).status, 200);
+    assert.match(new TextDecoder().decode((await reader.read()).value), /event: reset/);
+    assert.deepEqual(await (await fetch(countUrl)).json(), { count: 0, lastEventId: null });
+    await post('/api/timer', { durationSeconds: 60 });
+    const next = { ...event, id: randomUUID() };
+    await post('/api/events', next);
+    assert.equal((await post('/api/completion-undo', event)).status, 200);
+    assert.deepEqual(await (await fetch(countUrl)).json(), { count: 1, lastEventId: next.id });
+    assert.equal((await (await fetch(
+      `${base}/api/completions?playerId=${playerId}&stationId=cut-blister`
+    )).json()).count, 2);
+    assert.equal((await (await fetch(`${base}/api/events?teamId=${otherTeam.id}`)).json()).length, 1);
+    await reader.cancel();
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('existing databases gain event and timer columns without losing prior data', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-'));
   const teamId = randomUUID();

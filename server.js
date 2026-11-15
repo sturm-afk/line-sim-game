@@ -6,13 +6,13 @@ const path = require('node:path');
 
 const stations = [
   { id: 'cut-blister', name: 'Cut blister pack' },
-  { id: 'affix-pills', name: 'Affix pills onto blister pack' },
+  { id: 'affix-pills', name: 'Attach pills to blister' },
   { id: 'cut-box', name: 'Cut product box' },
-  { id: 'inspect-blister', name: 'Inspect/QC blister pack (in-process)' },
-  { id: 'insert-blister', name: 'Insert blister pack into product box' },
-  { id: 'seal-box', name: 'Seal product box and affix batch number' },
-  { id: 'inspect-box', name: 'Inspect/QC product box (post process ready to ship)' },
-  { id: 'ship-box', name: 'Ship product box' }
+  { id: 'inspect-blister', name: 'Inspect blister pack' },
+  { id: 'insert-blister', name: 'Insert blister into box' },
+  { id: 'seal-box', name: 'Seal and label box' },
+  { id: 'inspect-box', name: 'Inspect box for shipping' },
+  { id: 'ship-box', name: 'Ship box' }
 ];
 const qcStationIds = new Set(['inspect-blister', 'inspect-box']);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -155,13 +155,50 @@ function createApp(dataDir) {
       if (req.method === 'GET' && url.pathname === '/api/completions') {
         const playerId = url.searchParams.get('playerId');
         const stationId = url.searchParams.get('stationId');
+        const teamId = url.searchParams.get('teamId');
         if (!playerId || !uuid.test(playerId) || !stations.some(station => station.id === stationId)) {
           return json(res, 400, { error: 'A valid player and station are required.' });
+        }
+        if (teamId !== null) {
+          if (!uuid.test(teamId) || !db.prepare('SELECT id FROM teams WHERE id = ?').get(teamId)) {
+            return json(res, 404, { error: 'Team not found.' });
+          }
+          const { count } = db.prepare(
+            'SELECT COUNT(*) AS count FROM events WHERE player_id = ? AND station_id = ? AND team_id = ?'
+          ).get(playerId, stationId, teamId);
+          const last = db.prepare(
+            'SELECT id FROM events WHERE player_id = ? AND station_id = ? AND team_id = ? ORDER BY rowid DESC LIMIT 1'
+          ).get(playerId, stationId, teamId);
+          return json(res, 200, { count, lastEventId: last?.id || null });
         }
         const { count } = db.prepare(
           'SELECT COUNT(*) AS count FROM events WHERE player_id = ? AND station_id = ?'
         ).get(playerId, stationId);
         return json(res, 200, { count });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/completion-undo') {
+        const input = await body(req);
+        if (!input || typeof input.id !== 'string' || !uuid.test(input.id) ||
+            typeof input.playerId !== 'string' || !uuid.test(input.playerId) ||
+            typeof input.teamId !== 'string' || !uuid.test(input.teamId) ||
+            !stations.some(station => station.id === input.stationId) || qcStationIds.has(input.stationId)) {
+          return json(res, 400, { error: 'A valid completion, player, team and standard station are required.' });
+        }
+        const existing = db.prepare('SELECT team_id, player_id, station_id FROM events WHERE id = ?').get(input.id);
+        if (existing && (existing.team_id !== input.teamId || existing.player_id !== input.playerId ||
+            existing.station_id !== input.stationId)) {
+          return json(res, 409, { error: 'Completion does not match the player, team and station.' });
+        }
+        if (existing) {
+          db.prepare('DELETE FROM events WHERE id = ?').run(input.id);
+          const reset = { teamId: input.teamId, stationId: input.stationId };
+          for (const subscriber of subscribers) {
+            if (!subscriber.teamId || subscriber.teamId === reset.teamId) {
+              subscriber.res.write(`event: reset\ndata: ${JSON.stringify(reset)}\n\n`);
+            }
+          }
+        }
+        return json(res, 200, { ok: true });
       }
       if (req.method === 'GET' && url.pathname === '/api/qc-counts') {
         const teamId = url.searchParams.get('teamId');
