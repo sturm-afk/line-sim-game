@@ -22,7 +22,7 @@
     header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 .25rem; }
     h1 { color: white; font-size: clamp(1.6rem, 3vw, 2.25rem); letter-spacing: -.025em; }
     header a { color: white; font-weight: 650; }
-    #countdown { color: var(--blue-deep); font-size: clamp(2.5rem, 8vw, 5rem); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1; }
+    #countdown, #total-shipped { color: var(--blue-deep); font-size: clamp(2.5rem, 8vw, 5rem); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1; }
     .card { margin: 1rem 0; padding: clamp(1rem, 2.5vw, 1.75rem); border: 1px solid #ffffff80; border-top: 4px solid #b8c2cc; border-radius: .8rem; background: white; box-shadow: 0 .75rem 2rem #001b2b40; }
     #timer-state { margin: .65rem 0 1.25rem; color: var(--muted); font-size: 1.1rem; font-weight: 700; }
     label { color: var(--blue-deep); font-weight: 700; }
@@ -31,12 +31,15 @@
     input:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
     button { border: 0; border-radius: .45rem; background: var(--blue); color: white; cursor: pointer; font-weight: 700; box-shadow: 0 2px 5px #073b5c24; }
     #start { background: var(--orange); }
-    button.secondary { border: 1px solid var(--border); background: #e5e9ed; color: var(--blue-deep); box-shadow: none; }
-    #game-reset { border-color: #b42318; color: #9c2018; }
-    button:disabled { opacity: .5; cursor: wait; }
-    .actions { display: flex; flex-wrap: nowrap; gap: .55rem; margin-top: .65rem; overflow-x: auto; }
+    .dashboard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: clamp(1rem, 4vw, 3rem); }
+    .timer-clock { display: flex; align-items: center; gap: 1rem; }
+    .timer-form { margin-top: .75rem; }
+    .duration { display: flex; align-items: center; gap: .5rem; }
+    #duration { width: 6rem; }
+    .total-shipped { color: var(--blue-deep); font-size: clamp(2.5rem, 8vw, 5rem); font-weight: 800; line-height: 1; text-align: center; }
+    #total-label { margin-top: .5rem; font-size: .4em; letter-spacing: .02em; }
     #connection, #status { font-weight: 700; }
-    #connection { margin-bottom: 0; }
+    .messages { text-align: center; }
     .error { color: #b42318; } .success { color: #167a45; }
     .table-wrap { overflow-x: auto; padding: .5rem; }
     table { width: 100%; min-width: 62rem; border-collapse: separate; border-spacing: 0; background: white; }
@@ -54,35 +57,39 @@
     [hidden] { display: none !important; }
     @media (max-width: 40rem) {
       header { align-items: flex-start; }
-      .actions button { flex: 0 0 auto; }
-      #duration { width: 100%; }
+      .dashboard { grid-template-columns: 1fr; }
+      .total-shipped { text-align: left; }
     }
   </style>
 </head>
 <body>
   <header><h1>Line Sim Game</h1></header>
   <main>
-    <section class="card" aria-label="Game timer">
-      <div id="countdown">--:--</div>
-      <p id="timer-state">Loading timer…</p>
-      <div id="controls">
-        <form id="timer-form">
-          <label for="duration">Timer duration (seconds)</label>
+    <section class="card dashboard" aria-label="Game dashboard">
+      <form id="timer-form" class="timer-panel">
+        <div class="timer-clock">
+          <div id="countdown">--:--</div>
+          <button id="start" type="submit">Start</button>
+        </div>
+        <p id="timer-state">Loading timer…</p>
+        <div class="duration">
           <input id="duration" type="number" min="1" max="86400" step="1" value="900" required>
-          <div class="actions">
-            <button id="start">Start</button>
-            <button id="round-reset" type="button" class="secondary">New Run</button>
-            <button id="game-reset" type="button" class="secondary">Reset Game</button>
-          </div>
-        </form>
+          <label for="duration">seconds</label>
+        </div>
+      </form>
+      <div class="total-shipped">
+        <div id="total-shipped">0</div>
+        <div id="total-label">TOTAL SHIPPED</div>
       </div>
-      <p id="connection" role="status" aria-live="polite">Connecting to scoreboard…</p>
-      <p id="status" role="status" aria-live="polite"></p>
     </section>
     <section class="card table-wrap">
       <table><thead id="head"></thead><tbody id="teams"></tbody></table>
       <p id="empty" hidden>No teams yet. Teams will appear here when they join.</p>
     </section>
+    <div class="messages">
+      <p id="connection" role="status" aria-live="polite">Connecting to scoreboard…</p>
+      <p id="status" role="status" aria-live="polite"></p>
+    </div>
   </main>
   <script>
     const api = '/api/vercel';
@@ -154,6 +161,9 @@
         });
         body.append(row);
       });
+      $('total-shipped').textContent = data.counts
+        .filter(item => item.stationId === 'ship-box')
+        .reduce((total, item) => total + item.count, 0);
       $('duration').value = data.timer.durationSeconds;
       timerDisplay();
     }
@@ -193,12 +203,6 @@
       event.preventDefault();
       if (timerRunning()) action('/timer-stop');
       else action('/timer-start', { durationSeconds: Number($('duration').value) });
-    });
-    $('round-reset').addEventListener('click', () => {
-      if (confirm('Clear all completions but keep teams and timer? This cannot be undone.')) action('/round-reset');
-    });
-    $('game-reset').addEventListener('click', () => {
-      if (confirm('Delete all teams and completions and restore a stopped 15-minute timer? This cannot be undone.')) action('/game-reset');
     });
     refresh();
     setInterval(timerDisplay, 250);
