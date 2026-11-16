@@ -4,7 +4,7 @@ const { mkdtempSync, rmSync } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { createApp } = require('../server');
+const { createApp } = require('../standalone/app.cjs');
 
 test('scoreboard snapshots and live updates include all teams, stations and the shared timer', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-scoreboard-'));

@@ -3,6 +3,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { randomUUID } = require('node:crypto');
 const { mkdirSync, readFileSync } = require('node:fs');
 const path = require('node:path');
+const projectRoot = path.resolve(__dirname, '..');
 
 const stations = [
   { id: 'cut-blister', name: 'Cut blister pack' },
@@ -43,8 +44,8 @@ function createApp(dataDir) {
     db.exec('ALTER TABLE events ADD COLUMN result TEXT');
   }
   const subscribers = new Set();
-  const page = readFileSync(path.join(__dirname, 'public', 'original_index.html'));
-  const scoreboardPage = readFileSync(path.join(__dirname, 'public', 'original_scoreboard.html'));
+  const page = readFileSync(path.join(projectRoot, 'public', 'original_index.html'));
+  const scoreboardPage = readFileSync(path.join(projectRoot, 'public', 'original_scoreboard.html'));
 
   function json(res, status, value) {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -331,7 +332,7 @@ function createApp(dataDir) {
 }
 
 if (require.main === module) {
-  const server = createApp(process.env.DATA_DIR || path.join(__dirname, 'data'));
+  const server = createApp(process.env.DATA_DIR || path.join(projectRoot, 'data'));
   server.listen(process.env.PORT || 3000, '0.0.0.0', () => {
     console.log(`Line Sim Game listening on port ${server.address().port}`);
   });

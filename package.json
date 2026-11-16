@@ -4,7 +4,7 @@
   "private": true,
   "description": "A team-building production-line simulator",
   "scripts": {
-    "start": "node server.js",
+    "start": "node standalone/app.cjs",
     "test": "node --test"
   },
   "engines": {

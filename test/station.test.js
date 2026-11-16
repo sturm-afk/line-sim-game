@@ -5,7 +5,7 @@ const { DatabaseSync } = require('node:sqlite');
 const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { createApp } = require('../server');
+const { createApp } = require('../standalone/app.cjs');
 
 test('teams and completion events persist, stay isolated, and are idempotent', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'line-sim-'));
