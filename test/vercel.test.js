@@ -26,6 +26,67 @@ test('Vercel serves the player page and rewrites the scoreboard route', () => {
   assert.equal(vercelConfig.framework, null);
 });
 
+test('player page puts prominent actions before timer and collapsed settings', () => {
+  const page = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  const markup = page.split('<script>')[0];
+  assert.match(markup, /class="team-row"[\s\S]*id="team-label"[\s\S]*id="count"/);
+  assert.doesNotMatch(markup, /Your recorded completions here:/);
+  assert.match(markup, /id="undo"[^>]*>Oops! -1<\/button>/);
+  assert.match(markup, /id="done"[^>]*>Done! \+1<\/button>/);
+  assert.match(markup, /id="done"[\s\S]*id="timer"[\s\S]*id="status"[\s\S]*<details>[\s\S]*id="change-team"[\s\S]*id="station"/);
+  assert.match(page, /textContent = 'Oops! -1'/);
+  assert.match(page, /: 'Done! \+1'/);
+  assert.match(page, /\$\('count'\)\.hidden = selectedQc\(\)/);
+});
+
+test('player can retry a failed standard completion with the same event id', async () => {
+  const page = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  const script = page.match(/<script>([\s\S]*?)<\/script>/i)[1];
+  const elements = {};
+  function element(id) {
+    return elements[id] ||= {
+      value: '', textContent: '', hidden: false, disabled: false, listeners: {},
+      addEventListener(type, listener) { this.listeners[type] = listener; },
+      dispatchEvent(event) { this.listeners[event.type]?.(event); },
+      add(option) { if (id === 'station' && !this.value) this.value = option.value; }
+    };
+  }
+  const eventIds = [];
+  vm.runInNewContext(script, {
+    document: { getElementById: element },
+    localStorage: {
+      getItem: key => key.endsWith('team-id') ? 'team-1' : null,
+      setItem() {}
+    },
+    crypto: { randomUUID: () => 'event-id' },
+    Option: function (name, value) { this.value = value; },
+    Event: function (type) { this.type = type; },
+    setInterval() {},
+    fetch: async (url, options = {}) => {
+      if (url.endsWith('/stations')) return Response.json([{ id: 'pack', name: 'Pack' }]);
+      if (url.endsWith('/teams')) return Response.json([{ id: 'team-1', name: 'Team A' }]);
+      if (url.endsWith('/scoreboard')) return Response.json({ timer: {}, serverTime: 0 });
+      if (url.includes('/completions?')) return Response.json({ count: 0, lastEventId: null });
+      if (url.endsWith('/events')) {
+        eventIds.push(JSON.parse(options.body).id);
+        return eventIds.length === 1
+          ? Response.json({ error: 'Try again' }, { status: 500 })
+          : Response.json({});
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  await elements.done.listeners.click();
+  assert.equal(elements.done.disabled, false);
+  assert.equal(elements.done.textContent, 'Retry completion');
+  assert.equal(elements.station.disabled, true);
+  await elements.done.listeners.click();
+  assert.deepEqual(eventIds, ['event-id', 'event-id']);
+  assert.equal(elements.done.textContent, 'Done! +1');
+  assert.equal(elements.station.disabled, false);
+});
+
 function request(path, { method = 'GET', body, headers = {} } = {}) {
   return new Request(`${origin}/api/vercel/${path}`, {
     method,
