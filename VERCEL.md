@@ -13,12 +13,10 @@ The Vercel-specific player and scoreboard use `/api/vercel/...` serverless funct
    | --- | --- |
    | `SUPABASE_URL` | Supabase project URL, such as `https://<project-ref>.supabase.co` |
    | `SUPABASE_SERVICE_ROLE_KEY` | Supabase server-side `service_role` secret key; never expose it in a `NEXT_PUBLIC_*` or `VITE_*` variable |
-   | `FACILITATOR_PASSWORD` | A strong, unique password for scoreboard facilitator controls |
-   | `FACILITATOR_SESSION_SECRET` | A separate random secret of at least 32 bytes (for example, generate with `openssl rand -base64 48`) |
 
-5. Redeploy after setting environment variables. Open `/` and `/scoreboard` on the deployment to verify the pages and configured database. These steps describe deployment setup; they do not imply that a deployment has been run or verified.
+4. Redeploy after setting environment variables. Open `/` and `/scoreboard` on the deployment to verify the pages and configured database. These steps describe deployment setup; they do not imply that a deployment has been run or verified.
 
-The Supabase service-role key and facilitator secrets are used only by the serverless function. Keep them out of source control and browser-visible environment variables. The SQL migration enables row-level security and grants table access only to the backend role; the exposed RPC is likewise executable only by `service_role`. The facilitator login issues an HttpOnly, Secure, SameSite cookie that expires after 12 hours. Timer changes and station, round, and game resets require that session and a same-origin request. The player page has no destructive controls.
+The Supabase service-role key is used only by the serverless function. Keep it out of source control and browser-visible environment variables. The SQL migration enables row-level security and grants table access only to the backend role; the exposed RPC is likewise executable only by `service_role`. Scoreboard facilitator controls currently have no authentication; anyone who can access the deployment can use them. Deploy only in a trusted environment. Authentication may be added in a future release. The player page has no destructive controls.
 
 ## Vercel API and behavior
 

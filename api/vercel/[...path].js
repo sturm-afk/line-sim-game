@@ -1,5 +1,3 @@
-const { createHmac, timingSafeEqual } = require('node:crypto');
-
 const stations = [
   { id: 'cut-blister', name: 'Cut blister pack' },
   { id: 'affix-pills', name: 'Attach pills to blister' },
@@ -15,36 +13,12 @@ const facilitatorActions = new Set([
   'timer-start', 'timer-stop', 'timer-resume', 'timer-reset',
   'station-reset', 'round-reset', 'game-reset'
 ]);
-const cookieName = '__Host-vercel_facilitator';
 
 function json(status, body, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }
   });
-}
-
-function tokenSignature(value, secret) {
-  return createHmac('sha256', secret).update(value).digest('base64url');
-}
-
-function validSession(request, secret) {
-  const cookie = request.headers.get('cookie') || '';
-  const token = cookie.split(';').map(value => value.trim())
-    .find(value => value.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
-  if (!token || !secret || Buffer.byteLength(secret) < 32) return false;
-  const [expires, signature] = token.split('.');
-  if (!/^\d+$/.test(expires || '') || Number(expires) <= Date.now() || !signature) return false;
-  const expected = tokenSignature(expires, secret);
-  const supplied = Buffer.from(signature);
-  const calculated = Buffer.from(expected);
-  return supplied.length === calculated.length && timingSafeEqual(supplied, calculated);
-}
-
-function cookieHeader(secret, clear = false) {
-  if (clear) return `${cookieName}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
-  const expires = String(Date.now() + 12 * 60 * 60 * 1000);
-  return `${cookieName}=${expires}.${tokenSignature(expires, secret)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=43200`;
 }
 
 async function databaseRequest(action, payload, env, fetchImpl) {
@@ -85,39 +59,8 @@ async function handle(request, options = {}) {
   const url = new URL(request.url);
   const route = url.pathname.replace(/^\/api\/vercel\/?/, '');
   const method = request.method.toUpperCase();
-  const sessionSecret = env.FACILITATOR_SESSION_SECRET;
-  const authenticated = validSession(request, sessionSecret);
 
   if (route === 'stations' && method === 'GET') return stationsResponse();
-  if (route === 'session' && method === 'GET') return json(200, { authenticated });
-
-  if (route === 'auth' && method === 'POST') {
-    if (!originAllowed(request)) return json(403, { error: 'Request origin could not be verified.' });
-    if (Number(request.headers.get('content-length')) > 4096) {
-      return json(413, { error: 'Request body is too large.' });
-    }
-    let input;
-    try {
-      const text = await request.text();
-      if (text.length > 4096) return json(413, { error: 'Request body is too large.' });
-      input = JSON.parse(text);
-    } catch {
-      return json(400, { error: 'Invalid request body.' });
-    }
-    if (input?.action === 'logout') {
-      return json(200, { authenticated: false }, { 'Set-Cookie': cookieHeader('', true) });
-    }
-    if (input?.action !== 'login' || !env.FACILITATOR_PASSWORD ||
-        Buffer.byteLength(env.FACILITATOR_PASSWORD) < 12 || !sessionSecret || Buffer.byteLength(sessionSecret) < 32) {
-      return json(503, { error: 'Facilitator authentication is not configured.' });
-    }
-    const supplied = Buffer.from(String(input.password || ''));
-    const configured = Buffer.from(env.FACILITATOR_PASSWORD);
-    const matches = createHmac('sha256', 'line-sim-password-check').update(supplied).digest();
-    const expected = createHmac('sha256', 'line-sim-password-check').update(configured).digest();
-    if (!timingSafeEqual(matches, expected)) return json(401, { error: 'Incorrect facilitator password.' });
-    return json(200, { authenticated: true }, { 'Set-Cookie': cookieHeader(sessionSecret) });
-  }
 
   const getActions = {
     teams: 'teams',
@@ -145,7 +88,6 @@ async function handle(request, options = {}) {
     payload = Object.fromEntries(url.searchParams);
   } else if (method === 'POST' && postActions[route]) {
     if (facilitatorActions.has(postActions[route])) {
-      if (!authenticated) return json(401, { error: 'Facilitator login is required for this action.' });
       if (!originAllowed(request)) return json(403, { error: 'Request origin could not be verified.' });
     }
     if (Number(request.headers.get('content-length')) > 4096) {

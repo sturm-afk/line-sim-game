@@ -29,28 +29,20 @@
     <section class="card" aria-label="Game timer">
       <div id="countdown">--:--</div>
       <p id="timer-state">Loading timer…</p>
-      <div id="facilitator" hidden>
-        <form id="login-form">
-          <label for="password">Facilitator password</label>
-          <input id="password" type="password" autocomplete="current-password" required>
-          <button>Facilitator login</button>
-        </form>
-        <div id="controls" hidden>
-          <form id="timer-form">
-            <label for="duration">Timer duration (seconds)</label>
-            <input id="duration" type="number" min="1" max="86400" step="1" value="900" required>
-            <div class="actions">
-              <button id="start">Start / restart</button>
-              <button id="stop" type="button" class="secondary">Stop</button>
-              <button id="resume" type="button" class="secondary">Resume</button>
-              <button id="timer-reset" type="button" class="secondary">Reset timer</button>
-            </div>
-          </form>
+      <div id="controls">
+        <form id="timer-form">
+          <label for="duration">Timer duration (seconds)</label>
+          <input id="duration" type="number" min="1" max="86400" step="1" value="900" required>
           <div class="actions">
-            <button id="round-reset" type="button" class="secondary">New run / round</button>
-            <button id="game-reset" type="button" class="secondary">Reset game</button>
-            <button id="logout" type="button" class="secondary">Log out</button>
+            <button id="start">Start / restart</button>
+            <button id="stop" type="button" class="secondary">Stop</button>
+            <button id="resume" type="button" class="secondary">Resume</button>
+            <button id="timer-reset" type="button" class="secondary">Reset timer</button>
           </div>
+        </form>
+        <div class="actions">
+          <button id="round-reset" type="button" class="secondary">New run / round</button>
+          <button id="game-reset" type="button" class="secondary">Reset game</button>
         </div>
       </div>
       <p id="connection" role="status" aria-live="polite">Connecting to scoreboard…</p>
@@ -70,7 +62,6 @@
     let timerHandle;
     let polling = false;
     let refreshDelay = 3000;
-    let authenticated = false;
 
     async function request(path, options = {}) {
       const response = await fetch(api + path, { cache: 'no-store', ...options });
@@ -118,15 +109,13 @@
           cell.textContent = count
             ? qcStations.includes(station.id) ? `${count.count} (${count.pass} pass · ${count.fail} fail)` : String(count.count)
             : qcStations.includes(station.id) ? '0 (0 pass · 0 fail)' : '0';
-          if (authenticated) {
-            const reset = document.createElement('button');
-            reset.type = 'button';
-            reset.className = 'secondary';
-            reset.textContent = 'Reset';
-            reset.setAttribute('aria-label', `Reset ${team.name} · ${station.name}`);
-            reset.addEventListener('click', () => resetStation(team, station));
-            cell.append(document.createElement('br'), reset);
-          }
+          const reset = document.createElement('button');
+          reset.type = 'button';
+          reset.className = 'secondary';
+          reset.textContent = 'Reset';
+          reset.setAttribute('aria-label', `Reset ${team.name} · ${station.name}`);
+          reset.addEventListener('click', () => resetStation(team, station));
+          cell.append(document.createElement('br'), reset);
           row.append(cell);
         });
         body.append(row);
@@ -153,18 +142,6 @@
         timerHandle = setTimeout(refresh, refreshDelay);
       }
     }
-    async function checkSession() {
-      try {
-        authenticated = (await request('/session')).authenticated;
-        $('facilitator').hidden = false;
-        $('login-form').hidden = authenticated;
-        $('controls').hidden = !authenticated;
-        if (snapshot) render(snapshot);
-      } catch (error) {
-        $('facilitator').hidden = false;
-        status(`Facilitator access unavailable: ${error.message}`, 'error');
-      }
-    }
     async function action(path, payload) {
       try {
         await request(path, {
@@ -182,19 +159,6 @@
       if (!confirm(`Reset all ${team.name} completions for ${station.name}? This cannot be undone.`)) return;
       await action('/station-reset', { teamId: team.id, stationId: station.id });
     }
-    $('login-form').addEventListener('submit', async event => {
-      event.preventDefault();
-      try {
-        await request('/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'login', password: $('password').value })
-        });
-        $('password').value = '';
-        await checkSession();
-        await refresh();
-      } catch (error) { status(error.message, 'error'); }
-    });
     $('timer-form').addEventListener('submit', event => {
       event.preventDefault();
       action('/timer/start', { durationSeconds: Number($('duration').value) });
@@ -208,12 +172,6 @@
     $('game-reset').addEventListener('click', () => {
       if (confirm('Delete all teams and completions and restore a stopped 15-minute timer? This cannot be undone.')) action('/game/reset');
     });
-    $('logout').addEventListener('click', async () => {
-      await action('/auth', { action: 'logout' });
-      authenticated = false;
-      checkSession();
-    });
-    checkSession();
     refresh();
     setInterval(timerDisplay, 250);
   </script>
