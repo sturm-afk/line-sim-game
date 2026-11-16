@@ -255,6 +255,7 @@
       stationSelect.dispatchEvent(new Event('change'));
     });
     stationSelect.addEventListener('change', () => {
+      setupStation.value = stationSelect.value;
       const selectedStation = stations.find(item => item.id === stationSelect.value);
       if (selectedStation) $('page-title').textContent = selectedStation.name;
       localStorage.setItem('line-sim-vercel-station-id', stationSelect.value);

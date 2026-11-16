@@ -128,6 +128,7 @@ test('player page heading follows the initially selected station and station cha
   elements.station.value = 'inspect-box';
   elements.station.listeners.change();
   assert.equal(elements['page-title'].textContent, 'Inspect box');
+  assert.equal(elements['setup-station'].value, 'inspect-box');
 });
 
 test('player can retry a failed standard completion with the same event id', async () => {
