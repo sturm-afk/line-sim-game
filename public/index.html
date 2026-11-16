@@ -5,20 +5,82 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Line Sim Game · Player</title>
   <style>
-    :root { font: 16px system-ui, sans-serif; color: #17324d; background: #f3f7fa; }
-    body { max-width: 38rem; margin: 0 auto; padding: 1.25rem; }
-    main { background: white; border-radius: 1rem; padding: 1.25rem; box-shadow: 0 2px 14px #17324d18; }
-    h1 { margin-top: 0; color: #073b5c; }
-    label { display: block; margin: 1rem 0 .35rem; font-weight: 650; }
-    select, input, button { box-sizing: border-box; width: 100%; min-height: 2.8rem; padding: .6rem; font: inherit; }
-    button { border: 0; border-radius: .6rem; background: #007ba7; color: white; font-weight: 700; cursor: pointer; margin-top: .6rem; }
-    button.secondary { background: #e7eef3; color: #17324d; }
+    :root {
+      font: 16px/1.5 system-ui, sans-serif;
+      color: #17191c;
+      background: #f4f6f8;
+      --blue-deep: #073b5c;
+      --blue: #007ba7;
+      --blue-light: #dceff6;
+      --orange: #b6531d;
+      --border: #d5dce2;
+      --muted: #56616b;
+      --focus: #f0a15c;
+    }
+    body { max-width: 42rem; margin: 0 auto; padding: clamp(1rem, 4vw, 2rem); }
+    main {
+      overflow: hidden;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: clamp(1.25rem, 5vw, 2rem);
+      box-shadow: 0 .75rem 2rem #073b5c14;
+    }
+    h1 {
+      margin: -.25rem calc(clamp(1.25rem, 5vw, 2rem) * -1) 1rem;
+      padding: 1.25rem clamp(1.25rem, 5vw, 2rem);
+      border-bottom: 4px solid #b8c2cc;
+      background: linear-gradient(115deg, #073b5c, #0b5678 72%, #007ba7);
+      color: white;
+      font-size: clamp(1.6rem, 6vw, 2rem);
+      letter-spacing: -.025em;
+    }
+    p { color: var(--muted); }
+    label { display: block; margin: 1.2rem 0 .4rem; color: var(--blue-deep); font-weight: 700; }
+    select, input, button {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 3rem;
+      padding: .65rem .8rem;
+      font: inherit;
+    }
+    select, input {
+      border: 1px solid #aeb9c2;
+      border-radius: .55rem;
+      background: white;
+      color: #17191c;
+    }
+    select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+    button {
+      margin-top: .6rem;
+      border: 0;
+      border-radius: .55rem;
+      background: var(--blue-deep);
+      color: white;
+      font-weight: 750;
+      cursor: pointer;
+      box-shadow: 0 2px 5px #073b5c24;
+    }
+    #join, #done { background: var(--orange); }
+    #pass { background: #167a45; }
+    #fail { background: #b42318; }
+    button.secondary { border: 1px solid var(--border); background: #e5e9ed; color: var(--blue-deep); box-shadow: none; }
     button:disabled { opacity: .55; cursor: wait; }
-    .row { display: flex; gap: .6rem; }
-    .row button { flex: 1; }
-    #status { min-height: 1.5rem; }
-    .error { color: #a3211a; } .success { color: #167a45; }
+    .row { display: flex; gap: .75rem; }
+    .row button { flex: 1; min-height: 3.5rem; }
+    #player { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    #team-label { color: var(--blue-deep); }
+    #timer { padding: .75rem 1rem; border-left: 4px solid var(--blue); border-radius: .3rem; background: var(--blue-light); color: var(--blue-deep); font-weight: 700; }
+    #status { min-height: 1.5rem; font-weight: 650; }
+    .error { color: #b42318; } .success { color: #167a45; }
+    a { color: var(--blue); font-weight: 650; }
     [hidden] { display: none !important; }
+    @media (max-width: 22rem) {
+      .row { flex-direction: column; gap: 0; }
+    }
   </style>
 </head>
 <body>
