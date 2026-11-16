@@ -14,11 +14,12 @@ const env = {
   FACILITATOR_SESSION_SECRET: 'a secret used only to sign facilitator sessions'
 };
 
-test('Vercel uses its default player page and rewrites the scoreboard route', () => {
+test('Vercel serves the player page and rewrites the scoreboard route', () => {
   assert.equal(existsSync(path.join(__dirname, '../public/index.html')), true);
   assert.equal(existsSync(path.join(__dirname, '../public/scoreboard.html')), true);
   assert.deepEqual(vercelConfig.rewrites, [
-    { source: '/scoreboard', destination: '/scoreboard.html' }
+    { source: '/scoreboard', destination: '/scoreboard.html' },
+    { source: '/', destination: '/index.html' }
   ]);
 });
 
