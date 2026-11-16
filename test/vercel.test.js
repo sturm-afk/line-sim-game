@@ -1,7 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { existsSync } = require('node:fs');
+const path = require('node:path');
 const { createHmac } = require('node:crypto');
 const { handle } = require('../api/vercel/[...path].js');
+const vercelConfig = require('../vercel.json');
 
 const origin = 'https://line-sim.example';
 const env = {
@@ -10,6 +13,14 @@ const env = {
   FACILITATOR_PASSWORD: 'correct horse battery staple',
   FACILITATOR_SESSION_SECRET: 'a secret used only to sign facilitator sessions'
 };
+
+test('Vercel uses its default player page and rewrites the scoreboard route', () => {
+  assert.equal(existsSync(path.join(__dirname, '../public/index.html')), true);
+  assert.equal(existsSync(path.join(__dirname, '../public/scoreboard.html')), true);
+  assert.deepEqual(vercelConfig.rewrites, [
+    { source: '/scoreboard', destination: '/scoreboard.html' }
+  ]);
+});
 
 function request(path, { method = 'GET', body, headers = {} } = {}) {
   return new Request(`${origin}/api/vercel/${path}`, {

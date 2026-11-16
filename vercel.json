@@ -1,6 +1,5 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/vercel_player.html" },
-    { "source": "/scoreboard", "destination": "/vercel_scoreboard.html" }
+    { "source": "/scoreboard", "destination": "/scoreboard.html" }
   ]
 }

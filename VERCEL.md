@@ -1,6 +1,6 @@
 # Vercel deployment
 
-The Vercel-specific player and scoreboard use `/api/vercel/...` serverless functions and Supabase Postgres. The original `server.js`, SQLite-backed local workflow, player page, scoreboard page, package configuration, and tests are separate and unchanged. Vercel routes `/` to `public/vercel_player.html` and `/scoreboard` to `public/vercel_scoreboard.html`; the files also remain available at `/vercel_player.html` and `/vercel_scoreboard.html`.
+The Vercel-specific player and scoreboard use `/api/vercel/...` serverless functions and Supabase Postgres. Vercel serves `public/index.html` at `/` and rewrites `/scoreboard` to `public/scoreboard.html`. The standalone `server.js` continues to use its SQLite-backed workflow and serves `public/original_index.html` and `public/original_scoreboard.html`.
 
 ## Import and configure
 
