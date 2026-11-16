@@ -1,6 +1,6 @@
 # Vercel deployment
 
-The Vercel-specific player and scoreboard use `/api/vercel/...` serverless functions and Supabase Postgres. Vercel serves `public/index.html` at `/` and rewrites `/scoreboard` to `public/scoreboard.html`. The standalone SQLite server lives in `standalone/app.cjs` and serves `public/original_index.html` and `public/original_scoreboard.html` locally.
+The Vercel-specific player and scoreboard use `/api/vercel/...` serverless functions and Supabase Postgres. `vercel.json` selects Vercel's **Other** framework preset (`framework: null`), so it serves `public/index.html` at `/` and rewrites `/scoreboard` to `public/scoreboard.html`. The standalone SQLite server lives in `standalone/app.cjs` and serves `public/original_index.html` and `public/original_scoreboard.html` locally.
 
 ## Import and configure
 

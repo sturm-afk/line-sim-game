@@ -17,6 +17,7 @@ test('Vercel serves the player page and rewrites the scoreboard route', () => {
   assert.deepEqual(vercelConfig.rewrites, [
     { source: '/scoreboard', destination: '/scoreboard.html' }
   ]);
+  assert.equal(vercelConfig.framework, null);
 });
 
 function request(path, { method = 'GET', body, headers = {} } = {}) {
