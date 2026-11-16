@@ -29,6 +29,8 @@ test('Vercel serves the player page and rewrites the scoreboard route', () => {
 test('player page puts prominent actions before timer and collapsed settings', () => {
   const page = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
   const markup = page.split('<script>')[0];
+  const setupForm = markup.match(/<form id="team-form">([\s\S]*?)<\/form>/)[1];
+  assert.match(setupForm, /id="team-choice"[\s\S]*id="setup-station"[\s\S]*id="join"/);
   assert.match(markup, /class="team-row"[\s\S]*id="team-label"[\s\S]*id="count"/);
   assert.doesNotMatch(markup, /Your recorded completions here:/);
   assert.match(markup, /id="undo"[^>]*>Oops! -1<\/button>/);
@@ -37,6 +39,55 @@ test('player page puts prominent actions before timer and collapsed settings', (
   assert.match(page, /textContent = 'Oops! -1'/);
   assert.match(page, /: 'Done! \+1'/);
   assert.match(page, /\$\('count'\)\.hidden = selectedQc\(\)/);
+});
+
+test('player setup uses the selected station when joining a team', async () => {
+  const page = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  const script = page.match(/<script>([\s\S]*?)<\/script>/i)[1];
+  const elements = {};
+  function element(id) {
+    return elements[id] ||= {
+      value: '', textContent: '', hidden: false, disabled: false, listeners: {},
+      addEventListener(type, listener) { this.listeners[type] = listener; },
+      dispatchEvent(event) { this.listeners[event.type]?.(event); },
+      add(option) {
+        if (['station', 'setup-station'].includes(id) && !this.value) this.value = option.value;
+      }
+    };
+  }
+  const requests = [];
+  vm.runInNewContext(script, {
+    document: { getElementById: element },
+    localStorage: { getItem: () => null, setItem() {} },
+    crypto: { randomUUID: () => 'player-id' },
+    Option: function (name, value) { this.value = value; },
+    Event: function (type) { this.type = type; },
+    setInterval() {},
+    fetch: async (url, options = {}) => {
+      requests.push({ url, options });
+      if (url.endsWith('/stations')) return Response.json([
+        { id: 'cut-box', name: 'Cut box' },
+        { id: 'inspect-box', name: 'Inspect box' }
+      ]);
+      if (url.endsWith('/teams') && options.method === 'POST') {
+        return Response.json({ id: 'team-1', name: 'Team A' });
+      }
+      if (url.endsWith('/teams')) return Response.json([]);
+      if (url.endsWith('/scoreboard')) return Response.json({ timer: {}, serverTime: 0 });
+      if (url.includes('/completions?')) return Response.json({ count: 0, lastEventId: null });
+      throw new Error(`Unexpected request: ${url}`);
+    }
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  elements['setup-station'].value = 'inspect-box';
+  elements['setup-station'].listeners.change();
+  elements['team-name'].value = 'Team A';
+  await elements['team-form'].listeners.submit({ preventDefault() {} });
+  const completionsRequest = requests.find(({ url }) => url.includes('/completions?'));
+  assert.match(completionsRequest.url, /stationId=inspect-box/);
+  assert.equal(elements.station.value, 'inspect-box');
+  assert.equal(elements['team-form'].hidden, true);
+  assert.equal(elements.player.hidden, false);
 });
 
 test('player page heading follows the initially selected station and station changes', async () => {

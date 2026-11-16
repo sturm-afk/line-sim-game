@@ -98,6 +98,8 @@
       <select id="team-choice"><option value="">Choose a team</option></select>
       <label for="team-name">Or create/join by name</label>
       <input id="team-name" maxlength="80" autocomplete="off">
+      <label for="setup-station">Choose your station</label>
+      <select id="setup-station"></select>
       <button id="join">Join team</button>
     </form>
     <section id="player" hidden>
@@ -132,6 +134,7 @@
     const teamForm = $('team-form');
     const teamChoice = $('team-choice');
     const teamName = $('team-name');
+    const setupStation = $('setup-station');
     const player = $('player');
     const stationSelect = $('station');
     const status = $('status');
@@ -247,6 +250,10 @@
     });
     teamChoice.addEventListener('change', () => { if (teamChoice.value) teamName.value = ''; });
     teamName.addEventListener('input', () => { if (teamName.value) teamChoice.value = ''; });
+    setupStation.addEventListener('change', () => {
+      stationSelect.value = setupStation.value;
+      stationSelect.dispatchEvent(new Event('change'));
+    });
     stationSelect.addEventListener('change', () => {
       const selectedStation = stations.find(item => item.id === stationSelect.value);
       if (selectedStation) $('page-title').textContent = selectedStation.name;
@@ -300,9 +307,17 @@
       stations = availableStations;
       teams = response;
       teams.forEach(item => teamChoice.add(new Option(item.name, item.id)));
-      stations.forEach(item => stationSelect.add(new Option(item.name, item.id)));
+      stations.forEach(item => {
+        stationSelect.add(new Option(item.name, item.id));
+        setupStation.add(new Option(item.name, item.id));
+      });
       const lastStation = localStorage.getItem('line-sim-vercel-station-id');
-      if (stations.some(item => item.id === lastStation)) stationSelect.value = lastStation;
+      if (stations.some(item => item.id === lastStation)) {
+        stationSelect.value = lastStation;
+        setupStation.value = lastStation;
+      } else {
+        setupStation.value = stationSelect.value;
+      }
       stationSelect.dispatchEvent(new Event('change'));
       const savedTeam = teams.find(item => item.id === localStorage.getItem('line-sim-vercel-team-id'));
       if (savedTeam) selectTeam(savedTeam);
