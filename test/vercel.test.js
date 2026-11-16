@@ -13,8 +13,13 @@ const env = {
 };
 
 test('Vercel serves the player page and rewrites the scoreboard route', () => {
-  assert.equal(existsSync(path.join(__dirname, '../public/index.html')), true);
-  assert.equal(existsSync(path.join(__dirname, '../public/scoreboard.html')), true);
+  const playerPage = path.join(__dirname, '../public/index.html');
+  const scoreboardPage = path.join(__dirname, '../public/scoreboard.html');
+  assert.equal(existsSync(playerPage), true);
+  assert.equal(existsSync(scoreboardPage), true);
+  assert.doesNotMatch(readFileSync(playerPage, 'utf8'), /href=["']\/scoreboard["']/);
+  assert.doesNotMatch(readFileSync(playerPage, 'utf8'), /Choose your team and station\./);
+  assert.doesNotMatch(readFileSync(scoreboardPage, 'utf8'), /href=["']\/["']/);
   assert.deepEqual(vercelConfig.rewrites, [
     { source: '/scoreboard', destination: '/scoreboard.html' }
   ]);
