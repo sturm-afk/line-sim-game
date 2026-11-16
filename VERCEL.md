@@ -22,6 +22,8 @@ The Supabase service-role key is used only by the serverless function. Keep it o
 
 The Vercel pages call only `/api/vercel/...`; they do not call the standalone API or depend on a persistent Node process. The scoreboard refreshes through bounded polling (3 seconds, backing off to 30 seconds after failures) and displays connection/retry state. Teams, completions, QC outcomes, and timer state are stored in Supabase across function invocations.
 
+The scoreboard uses the single-segment facilitator endpoints `/api/vercel/timer-start`, `timer-stop`, `timer-resume`, `timer-reset`, `round-reset`, and `game-reset`. The older nested endpoints remain available for API clients.
+
 The database RPC validates team names, UUIDs, station IDs, QC results, timer durations, and undo requests. It uses unique constraints and transactions for case-insensitive team joins and idempotent event IDs; new completions require a running, unexpired timer. Undo remains available after the timer stops. Station reset removes only that team's events at the selected station; a round reset clears events but keeps teams and the timer; a game reset deletes events and teams and restores a stopped 15-minute timer. API, validation, and database errors are returned to the pages as readable status messages.
 
 To apply a future schema change, add an ordered SQL file under `migrations/` and run it against the same Supabase project before deploying code that depends on it. Do not copy the Vercel tables into the standalone SQLite database.
