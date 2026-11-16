@@ -65,7 +65,12 @@
 
     async function request(path, options = {}) {
       const response = await fetch(api + path, { cache: 'no-store', ...options });
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(`Unexpected server response (${response.status}). Please retry.`);
+      }
       if (!response.ok) throw new Error(data.error || 'Request failed. Please retry.');
       return data;
     }
@@ -109,13 +114,6 @@
           cell.textContent = count
             ? qcStations.includes(station.id) ? `${count.count} (${count.pass} pass · ${count.fail} fail)` : String(count.count)
             : qcStations.includes(station.id) ? '0 (0 pass · 0 fail)' : '0';
-          const reset = document.createElement('button');
-          reset.type = 'button';
-          reset.className = 'secondary';
-          reset.textContent = 'Reset';
-          reset.setAttribute('aria-label', `Reset ${team.name} · ${station.name}`);
-          reset.addEventListener('click', () => resetStation(team, station));
-          cell.append(document.createElement('br'), reset);
           row.append(cell);
         });
         body.append(row);
@@ -155,22 +153,18 @@
         status(error.message, 'error');
       }
     }
-    async function resetStation(team, station) {
-      if (!confirm(`Reset all ${team.name} completions for ${station.name}? This cannot be undone.`)) return;
-      await action('/station-reset', { teamId: team.id, stationId: station.id });
-    }
     $('timer-form').addEventListener('submit', event => {
       event.preventDefault();
-      action('/timer/start', { durationSeconds: Number($('duration').value) });
+      action('/timer-start', { durationSeconds: Number($('duration').value) });
     });
-    $('stop').addEventListener('click', () => action('/timer/stop'));
-    $('resume').addEventListener('click', () => action('/timer/resume'));
-    $('timer-reset').addEventListener('click', () => action('/timer/reset'));
+    $('stop').addEventListener('click', () => action('/timer-stop'));
+    $('resume').addEventListener('click', () => action('/timer-resume'));
+    $('timer-reset').addEventListener('click', () => action('/timer-reset'));
     $('round-reset').addEventListener('click', () => {
-      if (confirm('Clear all completions but keep teams and timer? This cannot be undone.')) action('/round/reset');
+      if (confirm('Clear all completions but keep teams and timer? This cannot be undone.')) action('/round-reset');
     });
     $('game-reset').addEventListener('click', () => {
-      if (confirm('Delete all teams and completions and restore a stopped 15-minute timer? This cannot be undone.')) action('/game/reset');
+      if (confirm('Delete all teams and completions and restore a stopped 15-minute timer? This cannot be undone.')) action('/game-reset');
     });
     refresh();
     setInterval(timerDisplay, 250);
