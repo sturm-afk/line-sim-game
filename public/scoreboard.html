@@ -34,7 +34,7 @@
     button.secondary { border: 1px solid var(--border); background: #e5e9ed; color: var(--blue-deep); box-shadow: none; }
     #game-reset { border-color: #b42318; color: #9c2018; }
     button:disabled { opacity: .5; cursor: wait; }
-    .actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .65rem; }
+    .actions { display: flex; flex-wrap: nowrap; gap: .55rem; margin-top: .65rem; overflow-x: auto; }
     #connection, #status { font-weight: 700; }
     #connection { margin-bottom: 0; }
     .error { color: #b42318; } .success { color: #167a45; }
@@ -54,7 +54,7 @@
     [hidden] { display: none !important; }
     @media (max-width: 40rem) {
       header { align-items: flex-start; }
-      .actions button { flex: 1 1 9rem; }
+      .actions button { flex: 0 0 auto; }
       #duration { width: 100%; }
     }
   </style>
@@ -70,16 +70,11 @@
           <label for="duration">Timer duration (seconds)</label>
           <input id="duration" type="number" min="1" max="86400" step="1" value="900" required>
           <div class="actions">
-            <button id="start">Start / restart</button>
-            <button id="stop" type="button" class="secondary">Stop</button>
-            <button id="resume" type="button" class="secondary">Resume</button>
-            <button id="timer-reset" type="button" class="secondary">Reset timer</button>
+            <button id="start">Start</button>
+            <button id="round-reset" type="button" class="secondary">New Run</button>
+            <button id="game-reset" type="button" class="secondary">Reset Game</button>
           </div>
         </form>
-        <div class="actions">
-          <button id="round-reset" type="button" class="secondary">New run / round</button>
-          <button id="game-reset" type="button" class="secondary">Reset game</button>
-        </div>
       </div>
       <p id="connection" role="status" aria-live="polite">Connecting to scoreboard…</p>
       <p id="status" role="status" aria-live="polite"></p>
@@ -111,14 +106,19 @@
       return data;
     }
     function status(message, kind = '') { $('status').textContent = message; $('status').className = kind; }
+    function timerRunning() {
+      return Boolean(snapshot && snapshot.timer.endsAt !== null && snapshot.timer.endsAt > Date.now() + timerOffset);
+    }
     function timerDisplay() {
       if (!snapshot) return;
       const timer = snapshot.timer;
+      const running = timerRunning();
       let seconds;
       if (timer.endsAt !== null) seconds = Math.max(0, Math.ceil((timer.endsAt - (Date.now() + timerOffset)) / 1000));
       else if (timer.remainingSeconds !== null) seconds = timer.remainingSeconds;
       else seconds = timer.durationSeconds;
       $('countdown').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      $('start').textContent = running ? 'Stop' : 'Start';
       $('timer-state').textContent = timer.endsAt !== null
         ? seconds > 0 ? 'Timer running' : 'Time is up'
         : timer.remainingSeconds !== null ? 'Timer paused' : 'Ready to start';
@@ -191,11 +191,9 @@
     }
     $('timer-form').addEventListener('submit', event => {
       event.preventDefault();
-      action('/timer-start', { durationSeconds: Number($('duration').value) });
+      if (timerRunning()) action('/timer-stop');
+      else action('/timer-start', { durationSeconds: Number($('duration').value) });
     });
-    $('stop').addEventListener('click', () => action('/timer-stop'));
-    $('resume').addEventListener('click', () => action('/timer-resume'));
-    $('timer-reset').addEventListener('click', () => action('/timer-reset'));
     $('round-reset').addEventListener('click', () => {
       if (confirm('Clear all completions but keep teams and timer? This cannot be undone.')) action('/round-reset');
     });

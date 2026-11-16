@@ -138,7 +138,7 @@ test('flat and legacy facilitator routes forward the same actions and enforce or
   }
 });
 
-test('scoreboard controls use flat routes and render counts without per-cell resets', async () => {
+test('scoreboard controls use one row, toggle the timer, and render counts without per-cell resets', async () => {
   const elements = new Map();
   function element() {
     return {
@@ -155,7 +155,7 @@ test('scoreboard controls use flat routes and render counts without per-cell res
     },
     createElement: element
   };
-  const snapshot = {
+  let snapshot = {
     stations: [{ id: 'cut-box', name: 'Cut box' }],
     teams: [{ id: 'team', name: 'Team' }],
     counts: [{ teamId: 'team', stationId: 'cut-box', count: 2 }],
@@ -165,12 +165,24 @@ test('scoreboard controls use flat routes and render counts without per-cell res
   const calls = [];
   let badResponse = false;
   const html = readFileSync(path.join(__dirname, '../public/scoreboard.html'), 'utf8');
+  assert.equal((html.match(/class="actions"/g) || []).length, 1);
+  assert.match(html, /id="start">Start</);
+  assert.match(html, /id="round-reset"[^>]*>New Run</);
+  assert.match(html, /id="game-reset"[^>]*>Reset Game</);
+  assert.doesNotMatch(html, /id="(?:stop|resume|timer-reset)"/);
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   vm.runInNewContext(script, {
     document, confirm: () => true, setInterval() {}, setTimeout() {}, clearTimeout() {},
     fetch: async (url, options) => {
       calls.push({ url, options });
       if (badResponse && options.method === 'POST') return new Response('Not found', { status: 404 });
+      if (options.method === 'POST' && url.endsWith('/timer-start')) {
+        const { durationSeconds } = JSON.parse(options.body);
+        snapshot.timer = { durationSeconds, endsAt: Date.now() + durationSeconds * 1000, remainingSeconds: null };
+      }
+      if (options.method === 'POST' && url.endsWith('/timer-stop')) {
+        snapshot.timer = { ...snapshot.timer, endsAt: null, remainingSeconds: 30 };
+      }
       return Response.json(options.method === 'POST' ? { ok: true } : snapshot);
     }
   });
@@ -179,23 +191,33 @@ test('scoreboard controls use flat routes and render counts without per-cell res
   const cell = elements.get('teams').children[0].children[1];
   assert.equal(cell.textContent, '2');
   assert.deepEqual(cell.children, []);
-  for (const [id, type, route] of [
-    ['timer-form', 'submit', 'timer-start'],
-    ['stop', 'click', 'timer-stop'],
-    ['resume', 'click', 'timer-resume'],
-    ['timer-reset', 'click', 'timer-reset'],
-    ['round-reset', 'click', 'round-reset'],
-    ['game-reset', 'click', 'game-reset']
+  assert.equal(elements.get('start').textContent, 'Start');
+  elements.get('timer-form').listeners.submit({ preventDefault() {} });
+  await flush();
+  assert.equal(calls.filter(call => call.options.method === 'POST').at(-1).url, '/api/vercel/timer-start');
+  assert.equal(elements.get('start').textContent, 'Stop');
+  elements.get('timer-form').listeners.submit({ preventDefault() {} });
+  await flush();
+  assert.equal(calls.filter(call => call.options.method === 'POST').at(-1).url, '/api/vercel/timer-stop');
+  assert.equal(elements.get('start').textContent, 'Start');
+  snapshot.timer.endsAt = Date.now() - 1;
+  elements.get('timer-form').listeners.submit({ preventDefault() {} });
+  await flush();
+  assert.equal(calls.filter(call => call.options.method === 'POST').at(-1).url, '/api/vercel/timer-start');
+  for (const [id, route] of [
+    ['round-reset', 'round-reset'],
+    ['game-reset', 'game-reset']
   ]) {
-    elements.get(id).listeners[type]({ preventDefault() {} });
+    elements.get(id).listeners.click({ preventDefault() {} });
     await flush();
     assert.equal(calls.filter(call => call.options.method === 'POST').at(-1).url, `/api/vercel/${route}`);
   }
-  assert.deepEqual(JSON.parse(calls.find(call => call.url.endsWith('/timer-start')).options.body), {
+  assert.deepEqual(JSON.parse(calls.filter(call => call.url.endsWith('/timer-start'))[0].options.body), {
     durationSeconds: 60
   });
   badResponse = true;
-  elements.get('stop').listeners.click();
+  snapshot.timer.endsAt = Date.now() + 30000;
+  elements.get('timer-form').listeners.submit({ preventDefault() {} });
   await flush();
   assert.equal(elements.get('status').textContent, 'Unexpected server response (404). Please retry.');
 });
