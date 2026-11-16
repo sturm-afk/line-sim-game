@@ -15,8 +15,7 @@ test('Vercel serves the player page and rewrites the scoreboard route', () => {
   assert.equal(existsSync(path.join(__dirname, '../public/index.html')), true);
   assert.equal(existsSync(path.join(__dirname, '../public/scoreboard.html')), true);
   assert.deepEqual(vercelConfig.rewrites, [
-    { source: '/scoreboard', destination: '/scoreboard.html' },
-    { source: '/', destination: '/index.html' }
+    { source: '/scoreboard', destination: '/scoreboard.html' }
   ]);
 });
 
