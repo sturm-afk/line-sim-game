@@ -43,8 +43,8 @@ function createApp(dataDir) {
     db.exec('ALTER TABLE events ADD COLUMN result TEXT');
   }
   const subscribers = new Set();
-  const page = readFileSync(path.join(__dirname, 'public', 'index.html'));
-  const scoreboardPage = readFileSync(path.join(__dirname, 'public', 'scoreboard.html'));
+  const page = readFileSync(path.join(__dirname, 'public', 'original_index.html'));
+  const scoreboardPage = readFileSync(path.join(__dirname, 'public', 'original_scoreboard.html'));
 
   function json(res, status, value) {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });

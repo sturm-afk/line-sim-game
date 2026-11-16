@@ -3,240 +3,219 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Scoreboard | Line Sim Game</title>
+  <title>Line Sim Game · Scoreboard</title>
   <style>
-    :root {
-      color-scheme: light;
-      --blue-deep: #073b5c;
-      --blue: #007ba7;
-      --blue-light: #dceff6;
-      --silver: #b8c2cc;
-      --orange: #b6531d;
-      --background: #f4f6f8;
-      --card: #fff;
-      --text: #17191c;
-      --text-secondary: #56616b;
-      --border: #d5dce2;
-      --shadow: 0 12px 32px rgb(7 59 92 / 16%);
-    }
-    * { box-sizing: border-box; }
-    body { min-height: 100vh; margin: 0; background: linear-gradient(145deg, #0b4568, var(--blue-deep) 60%, #052f4a); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
-    main { max-width: 100rem; margin: auto; padding: clamp(1rem, 3vw, 2.5rem); }
-    .page-header { margin: 0 0 1.5rem; color: white; }
-    .brand { margin: 0 0 .25rem; color: #d1e8f1; font-size: .8rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-    h1 { margin: 0 0 .35rem; font-size: clamp(1.8rem, 3vw, 3rem); line-height: 1.15; }
-    button:focus-visible, input:focus-visible { outline: 3px solid #f0a15c; outline-offset: 3px; }
-    .clock { margin: 1.5rem 0 1rem; padding: clamp(1rem, 3vw, 2rem); border: 1px solid rgb(255 255 255 / 55%); border-radius: 1rem; background: linear-gradient(145deg, #fff, #f3f6f8); box-shadow: var(--shadow); text-align: center; }
-    #countdown { color: var(--blue-deep); font-size: clamp(4rem, 12vw, 10rem); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1; }
-    #timer-state { margin: .5rem 0 1rem; color: var(--text-secondary); font-size: 1.25rem; font-weight: 700; }
-    form { display: flex; justify-content: center; align-items: end; flex-wrap: nowrap; gap: .75rem; overflow-x: auto; }
-    label { display: grid; gap: .25rem; color: var(--text-secondary); font-size: .9rem; font-weight: 700; text-align: left; }
-    input, button { min-height: 2.9rem; border: 1px solid var(--border); border-radius: .55rem; padding: .6rem .8rem; font: inherit; }
-    input { width: 7rem; background: white; color: var(--text); }
-    button { flex: 0 0 auto; border-color: transparent; background: var(--orange); color: white; font-weight: 750; cursor: pointer; white-space: nowrap; }
-    button:hover { filter: brightness(1.08); }
-    #reset-game { background: #8f261e; }
-    #status { min-height: 1.5em; margin: .5rem 0 1rem; color: #fff0d9; font-weight: 700; text-align: center; }
-    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: .9rem; background: var(--card); box-shadow: var(--shadow); }
-    table { width: 100%; min-width: 54rem; border-collapse: collapse; font-size: clamp(1rem, 1.4vw, 1.4rem); }
-    th, td { padding: .8rem .65rem; border: 1px solid var(--border); text-align: center; }
-    thead th { background: linear-gradient(110deg, var(--blue-deep), var(--blue)); color: white; font-size: .88em; font-weight: 750; }
-    tbody tr:nth-child(even) { background: #f2f7f9; }
-    tbody th { min-width: 9rem; background: #fff; color: var(--blue-deep); font-size: 1.1em; text-align: left; }
-    tbody tr:nth-child(3n + 1) th { border-left: .4rem solid var(--blue); }
-    tbody tr:nth-child(3n + 2) th { border-left: .4rem solid var(--orange); }
-    tbody tr:nth-child(3n) th { border-left: .4rem solid var(--silver); }
-    td { color: var(--text); font-size: 1.35em; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .qc { display: block; color: var(--text-secondary); font-size: .65em; font-weight: 650; white-space: nowrap; }
-    #empty { padding: 1rem; border: 1px solid rgb(255 255 255 / 35%); border-radius: .65rem; color: white; text-align: center; }
-    @media (max-width: 40rem) {
-      .clock { margin-top: 1rem; }
-      form { justify-content: flex-start; }
-    }
+    :root { font: 15px system-ui, sans-serif; color: #17324d; background: #f3f7fa; }
+    body { margin: 0; padding: 1rem; }
+    header, main { max-width: 76rem; margin: auto; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    h1 { color: #073b5c; } #countdown { font-size: clamp(2rem, 8vw, 4rem); font-variant-numeric: tabular-nums; }
+    .card { background: white; border-radius: .8rem; padding: 1rem; margin: 1rem 0; box-shadow: 0 2px 14px #17324d18; }
+    input, button { min-height: 2.5rem; padding: .45rem .7rem; font: inherit; }
+    button { border: 0; border-radius: .45rem; background: #007ba7; color: white; cursor: pointer; font-weight: 650; }
+    button.secondary { background: #e7eef3; color: #17324d; }
+    button:disabled { opacity: .5; cursor: wait; }
+    .actions { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .6rem; }
+    #connection { font-weight: 650; } .error { color: #a3211a; } .success { color: #167a45; }
+    .table-wrap { overflow-x: auto; } table { width: 100%; border-collapse: collapse; background: white; }
+    th, td { padding: .65rem; border: 1px solid #d5e0e7; text-align: center; }
+    th:first-child, td:first-child { text-align: left; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
+  <header><h1>Line Sim Game</h1><a href="/">Player page</a></header>
   <main>
-    <header class="page-header">
-      <p class="brand">LINE SIM GAME</p>
-      <h1>Production scoreboard</h1>
-    </header>
-    <section class="clock" aria-label="Countdown">
+    <section class="card" aria-label="Game timer">
       <div id="countdown">--:--</div>
       <p id="timer-state">Loading timer…</p>
-      <form id="timer-form">
-        <label>Duration (seconds)
-          <input id="duration" type="number" min="1" max="86400" step="1" value="900" required>
-        </label>
-        <button id="timer-toggle" type="submit">Start</button>
-        <button id="reset-round" type="button">New run / round</button>
-        <button id="reset-game" type="button">Reset game</button>
-      </form>
+      <div id="facilitator" hidden>
+        <form id="login-form">
+          <label for="password">Facilitator password</label>
+          <input id="password" type="password" autocomplete="current-password" required>
+          <button>Facilitator login</button>
+        </form>
+        <div id="controls" hidden>
+          <form id="timer-form">
+            <label for="duration">Timer duration (seconds)</label>
+            <input id="duration" type="number" min="1" max="86400" step="1" value="900" required>
+            <div class="actions">
+              <button id="start">Start / restart</button>
+              <button id="stop" type="button" class="secondary">Stop</button>
+              <button id="resume" type="button" class="secondary">Resume</button>
+              <button id="timer-reset" type="button" class="secondary">Reset timer</button>
+            </div>
+          </form>
+          <div class="actions">
+            <button id="round-reset" type="button" class="secondary">New run / round</button>
+            <button id="game-reset" type="button" class="secondary">Reset game</button>
+            <button id="logout" type="button" class="secondary">Log out</button>
+          </div>
+        </div>
+      </div>
+      <p id="connection" role="status" aria-live="polite">Connecting to scoreboard…</p>
+      <p id="status" role="status" aria-live="polite"></p>
     </section>
-    <p id="status" role="status"></p>
-    <div class="table-wrap">
-      <table>
-        <thead id="head"></thead>
-        <tbody id="teams"></tbody>
-      </table>
-    </div>
-    <p id="empty" hidden>No teams yet. Teams will appear here when they join.</p>
+    <section class="card table-wrap">
+      <table><thead id="head"></thead><tbody id="teams"></tbody></table>
+      <p id="empty" hidden>No teams yet. Teams will appear here when they join.</p>
+    </section>
   </main>
   <script>
-    const countdown = document.querySelector('#countdown');
-    const timerState = document.querySelector('#timer-state');
-    const duration = document.querySelector('#duration');
-    const status = document.querySelector('#status');
-    const head = document.querySelector('#head');
-    const teams = document.querySelector('#teams');
-    const empty = document.querySelector('#empty');
-    const qcStations = new Set(['inspect-blister', 'inspect-box']);
-    let timer = null;
-    let serverOffset = 0;
-    let initialized = false;
-    let loading = false;
-    let refreshNeeded = false;
-    let connected = false;
-    let loadFailed = false;
-    let retryTimer = null;
+    const api = '/api/vercel';
+    const $ = id => document.getElementById(id);
+    const qcStations = ['inspect-blister', 'inspect-box'];
+    let snapshot;
+    let timerOffset = 0;
+    let timerHandle;
+    let polling = false;
+    let refreshDelay = 3000;
+    let authenticated = false;
 
-    function showStatus() {
-      status.textContent = loadFailed ? 'Could not load scoreboard. Waiting to retry…' :
-        connected ? '' : 'Live connection lost. Reconnecting…';
+    async function request(path, options = {}) {
+      const response = await fetch(api + path, { cache: 'no-store', ...options });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Request failed. Please retry.');
+      return data;
     }
-
-    function renderClock() {
-      if (!timer) return;
-      const seconds = timer.endsAt === null ? timer.durationSeconds :
-        Math.max(0, Math.ceil((timer.endsAt - (Date.now() + serverOffset)) / 1000));
-      const displayedSeconds = timer.endsAt === null && timer.remainingSeconds !== null ?
-        timer.remainingSeconds : seconds;
-      const hours = Math.floor(displayedSeconds / 3600);
-      const minutes = Math.floor((displayedSeconds % 3600) / 60);
-      const remainder = displayedSeconds % 60;
-      countdown.textContent = hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}` :
-        `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
-      const running = timer.endsAt !== null && seconds > 0;
-      timerState.textContent = running ? 'Time remaining' :
-        timer.remainingSeconds !== null ? 'Stopped' : timer.endsAt === null ? 'Ready' : 'Time is up';
-      document.querySelector('#timer-toggle').textContent = running ? 'Stop' : 'Start';
+    function status(message, kind = '') { $('status').textContent = message; $('status').className = kind; }
+    function timerDisplay() {
+      if (!snapshot) return;
+      const timer = snapshot.timer;
+      let seconds;
+      if (timer.endsAt !== null) seconds = Math.max(0, Math.ceil((timer.endsAt - (Date.now() + timerOffset)) / 1000));
+      else if (timer.remainingSeconds !== null) seconds = timer.remainingSeconds;
+      else seconds = timer.durationSeconds;
+      $('countdown').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      $('timer-state').textContent = timer.endsAt !== null
+        ? seconds > 0 ? 'Timer running' : 'Time is up'
+        : timer.remainingSeconds !== null ? 'Timer paused' : 'Ready to start';
     }
-
     function render(data) {
-      timer = data.timer;
-      serverOffset = data.serverTime - Date.now();
-      if (!initialized) {
-        duration.value = timer.durationSeconds;
-        initialized = true;
-      }
-      renderClock();
+      snapshot = data;
+      timerOffset = data.serverTime - Date.now();
+      const head = $('head');
+      const body = $('teams');
+      head.replaceChildren();
+      body.replaceChildren();
       const header = document.createElement('tr');
-      const teamHeader = document.createElement('th');
-      teamHeader.scope = 'col';
-      teamHeader.textContent = 'Team';
-      header.append(teamHeader);
-      for (const station of data.stations) {
+      ['Team', ...data.stations.map(station => station.name)].forEach(text => {
         const cell = document.createElement('th');
-        cell.scope = 'col';
-        cell.textContent = station.name;
+        cell.textContent = text;
         header.append(cell);
-      }
-      head.replaceChildren(header);
-      const rows = data.teams.map(team => {
+      });
+      head.append(header);
+      $('empty').hidden = data.teams.length > 0;
+      data.teams.forEach(team => {
         const row = document.createElement('tr');
         const name = document.createElement('th');
         name.scope = 'row';
         name.textContent = team.name;
         row.append(name);
-        for (const station of data.stations) {
-          const count = data.counts.find(item => item.teamId === team.id && item.stationId === station.id);
+        data.stations.forEach(station => {
           const cell = document.createElement('td');
-          cell.textContent = count?.count || 0;
-          if (qcStations.has(station.id)) {
-            const detail = document.createElement('span');
-            detail.className = 'qc';
-            detail.textContent = `Pass ${count?.pass || 0} / Fail ${count?.fail || 0}`;
-            cell.append(detail);
+          const count = data.counts.find(item => item.teamId === team.id && item.stationId === station.id);
+          cell.textContent = count
+            ? qcStations.includes(station.id) ? `${count.count} (${count.pass} pass · ${count.fail} fail)` : String(count.count)
+            : qcStations.includes(station.id) ? '0 (0 pass · 0 fail)' : '0';
+          if (authenticated) {
+            const reset = document.createElement('button');
+            reset.type = 'button';
+            reset.className = 'secondary';
+            reset.textContent = 'Reset';
+            reset.setAttribute('aria-label', `Reset ${team.name} · ${station.name}`);
+            reset.addEventListener('click', () => resetStation(team, station));
+            cell.append(document.createElement('br'), reset);
           }
           row.append(cell);
-        }
-        return row;
-      });
-      teams.replaceChildren(...rows);
-      empty.hidden = data.teams.length > 0;
-    }
-
-    async function refresh() {
-      refreshNeeded = true;
-      if (loading) return;
-      loading = true;
-      while (refreshNeeded) {
-        refreshNeeded = false;
-        try {
-          const response = await fetch('/api/scoreboard', { cache: 'no-store' });
-          if (!response.ok) throw new Error('Request failed');
-          render(await response.json());
-          loadFailed = false;
-          clearTimeout(retryTimer);
-          retryTimer = null;
-        } catch {
-          loadFailed = true;
-          if (!retryTimer) retryTimer = setTimeout(() => { retryTimer = null; refresh(); }, 3000);
-        }
-        showStatus();
-      }
-      loading = false;
-    }
-
-    async function updateTimer(url, options) {
-      try {
-        const response = await fetch(url, options);
-        if (!response.ok) throw new Error('Request failed');
-        refresh();
-      } catch {
-        status.textContent = 'Could not update timer. Please try again.';
-      }
-    }
-
-    document.querySelector('#timer-form').addEventListener('submit', event => {
-      event.preventDefault();
-      if (timer.endsAt !== null && timer.endsAt > Date.now() + serverOffset) {
-        updateTimer('/api/timer/stop', { method: 'POST' });
-      } else if (timer.remainingSeconds > 0) {
-        updateTimer('/api/timer/resume', { method: 'POST' });
-      } else {
-        updateTimer('/api/timer', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ durationSeconds: Number(duration.value) })
         });
-      }
-    });
-    document.querySelector('#reset-round').addEventListener('click', async () => {
-      if (!confirm('Begin a new run or round? This will clear all team counts but keep the teams.')) return;
+        body.append(row);
+      });
+      $('duration').value = data.timer.durationSeconds;
+      timerDisplay();
+    }
+    async function refresh() {
+      if (polling) return;
+      polling = true;
       try {
-        const response = await fetch('/api/round/reset', { method: 'POST' });
-        if (!response.ok) throw new Error('Request failed');
-        refresh();
-      } catch {
-        status.textContent = 'Could not begin a new run. Please try again.';
+        const data = await request('/scoreboard');
+        render(data);
+        $('connection').textContent = 'Connected · scoreboard refreshes every 3 seconds';
+        $('connection').className = 'success';
+        refreshDelay = 3000;
+      } catch (error) {
+        $('connection').textContent = `Connection lost: ${error.message} Retrying…`;
+        $('connection').className = 'error';
+        refreshDelay = Math.min(refreshDelay * 2, 30000);
+      } finally {
+        polling = false;
+        clearTimeout(timerHandle);
+        timerHandle = setTimeout(refresh, refreshDelay);
       }
-    });
-    document.querySelector('#reset-game').addEventListener('click', async () => {
-      if (!confirm('Reset the entire game? This will delete all teams and completions and stop the timer. This cannot be undone.')) return;
+    }
+    async function checkSession() {
       try {
-        const response = await fetch('/api/game/reset', { method: 'POST' });
-        if (!response.ok) throw new Error('Request failed');
-        refresh();
-      } catch {
-        status.textContent = 'Could not reset the game. Please try again.';
+        authenticated = (await request('/session')).authenticated;
+        $('facilitator').hidden = false;
+        $('login-form').hidden = authenticated;
+        $('controls').hidden = !authenticated;
+        if (snapshot) render(snapshot);
+      } catch (error) {
+        $('facilitator').hidden = false;
+        status(`Facilitator access unavailable: ${error.message}`, 'error');
       }
+    }
+    async function action(path, payload) {
+      try {
+        await request(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          ...(payload === undefined ? {} : { body: JSON.stringify(payload) })
+        });
+        status('Updated.', 'success');
+        await refresh();
+      } catch (error) {
+        status(error.message, 'error');
+      }
+    }
+    async function resetStation(team, station) {
+      if (!confirm(`Reset all ${team.name} completions for ${station.name}? This cannot be undone.`)) return;
+      await action('/station-reset', { teamId: team.id, stationId: station.id });
+    }
+    $('login-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      try {
+        await request('/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', password: $('password').value })
+        });
+        $('password').value = '';
+        await checkSession();
+        await refresh();
+      } catch (error) { status(error.message, 'error'); }
     });
-    const stream = new EventSource('/api/events/stream');
-    stream.addEventListener('open', () => { connected = true; showStatus(); refresh(); });
-    stream.addEventListener('error', () => { connected = false; showStatus(); });
-    for (const type of ['team', 'completion', 'reset', 'timer', 'round-reset', 'game-reset']) stream.addEventListener(type, refresh);
-    setInterval(renderClock, 250);
+    $('timer-form').addEventListener('submit', event => {
+      event.preventDefault();
+      action('/timer/start', { durationSeconds: Number($('duration').value) });
+    });
+    $('stop').addEventListener('click', () => action('/timer/stop'));
+    $('resume').addEventListener('click', () => action('/timer/resume'));
+    $('timer-reset').addEventListener('click', () => action('/timer/reset'));
+    $('round-reset').addEventListener('click', () => {
+      if (confirm('Clear all completions but keep teams and timer? This cannot be undone.')) action('/round/reset');
+    });
+    $('game-reset').addEventListener('click', () => {
+      if (confirm('Delete all teams and completions and restore a stopped 15-minute timer? This cannot be undone.')) action('/game/reset');
+    });
+    $('logout').addEventListener('click', async () => {
+      await action('/auth', { action: 'logout' });
+      authenticated = false;
+      checkSession();
+    });
+    checkSession();
     refresh();
+    setInterval(timerDisplay, 250);
   </script>
 </body>
 </html>
