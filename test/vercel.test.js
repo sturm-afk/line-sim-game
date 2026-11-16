@@ -41,7 +41,7 @@ test('player page puts prominent actions before timer and collapsed settings', (
 
 test('player can retry a failed standard completion with the same event id', async () => {
   const page = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
-  const script = page.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = page.match(/<script>([\s\S]*?)<\/script>/i)[1];
   const elements = {};
   function element(id) {
     return elements[id] ||= {
