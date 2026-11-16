@@ -41,7 +41,7 @@ For players on iPhones, run the server on a computer reachable on the same netwo
 
 ## Scoreboard
 
-Open `http://<computer-address>:3000/scoreboard` on a shared screen. Enter a duration in seconds and select **Start** to start a shared countdown; select **Stop** to pause it. Stations accept completions only while the timer is running and above zero. **New run / round** clears all completion counts while keeping the teams; **Reset game** deletes all teams and completions, restores the timer to 15 minutes, and leaves the game inactive. Both reset actions require confirmation. The timer survives a server restart. Every team and station is shown, including zero totals. QC cells show the total inspections and separate pass/fail counts. Team creation, completions, station resets, timer changes, new rounds, and full-game resets update connected scoreboards live.
+Open `http://<computer-address>:3000/scoreboard` on a shared screen. Enter a duration in seconds and select **Start** to start a shared countdown; the button changes to **Stop** while the timer is running and pauses it when selected. Stations accept completions only while the timer is running and above zero. **New Run** clears all completion counts while keeping the teams; **Reset Game** deletes all teams and completions, restores the timer to 15 minutes, and leaves the game inactive. Both reset actions require confirmation. The timer survives a server restart. Every team and station is shown, including zero totals. QC cells show the total inspections and separate pass/fail counts. Team creation, completions, station resets, timer changes, new rounds, and full-game resets update connected scoreboards live.
 
 ## Event integration
 
