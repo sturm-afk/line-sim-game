@@ -2,16 +2,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { existsSync } = require('node:fs');
 const path = require('node:path');
-const { createHmac } = require('node:crypto');
 const { handle } = require('../api/vercel/[...path].js');
 const vercelConfig = require('../vercel.json');
 
 const origin = 'https://line-sim.example';
 const env = {
   SUPABASE_URL: 'https://database.example',
-  SUPABASE_SERVICE_ROLE_KEY: 'server-only-key',
-  FACILITATOR_PASSWORD: 'correct horse battery staple',
-  FACILITATOR_SESSION_SECRET: 'a secret used only to sign facilitator sessions'
+  SUPABASE_SERVICE_ROLE_KEY: 'server-only-key'
 };
 
 test('Vercel uses its default player page and rewrites the scoreboard route', () => {
@@ -31,13 +28,6 @@ function request(path, { method = 'GET', body, headers = {} } = {}) {
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
-}
-
-function facilitatorCookie() {
-  const expires = String(Date.now() + 60000);
-  const signature = createHmac('sha256', env.FACILITATOR_SESSION_SECRET)
-    .update(expires).digest('base64url');
-  return `__Host-vercel_facilitator=${expires}.${signature}`;
 }
 
 test('Vercel station API is isolated and does not require the database', async () => {
@@ -82,63 +72,45 @@ test('Vercel player APIs use the managed database RPC with parameterized JSON in
   assert.deepEqual(await response.json(), { id: 'team-id', name: "Team'); DROP TABLE teams; --" });
 });
 
-test('facilitator-only actions reject unauthenticated and cross-origin requests', async () => {
+test('facilitator actions require a same-origin request but no login', async () => {
   let called = false;
   const fetch = async () => {
     called = true;
     return Response.json({ httpStatus: 200, ok: true });
   };
-  const unauthorized = await handle(request('game/reset', { method: 'POST', body: {} }), { env, fetch });
-  assert.equal(unauthorized.status, 401);
-  assert.equal(called, false);
+  const allowed = await handle(request('game/reset', {
+    method: 'POST', body: {}, headers: { origin }
+  }), { env, fetch });
+  assert.equal(allowed.status, 200);
+  assert.equal(called, true);
 
+  called = false;
   const crossOrigin = await handle(request('game/reset', {
-    method: 'POST', body: {}, headers: {
-      origin: 'https://attacker.example', cookie: facilitatorCookie()
-    }
+    method: 'POST', body: {}, headers: { origin: 'https://attacker.example' }
   }), { env, fetch });
   assert.equal(crossOrigin.status, 403);
   assert.equal(called, false);
-});
 
-test('facilitator login issues a signed session required for protected controls', async () => {
-  const login = await handle(request('auth', {
-    method: 'POST',
-    body: { action: 'login', password: env.FACILITATOR_PASSWORD },
-    headers: { origin }
+  const authRoute = await handle(request('auth', {
+    method: 'POST', body: { action: 'login' }, headers: { origin }
   }), { env });
-  assert.equal(login.status, 200);
-  const cookie = login.headers.get('set-cookie');
-  assert.match(cookie, /HttpOnly; Secure; SameSite=Strict/);
-
-  let rpcBody;
-  const started = await handle(request('timer/start', {
-    method: 'POST',
-    body: { durationSeconds: 30 },
-    headers: { origin, cookie: cookie.split(';')[0] }
-  }), {
-    env,
-    fetch: async (_url, options) => {
-      rpcBody = JSON.parse(options.body);
-      return Response.json({ httpStatus: 200, ok: true });
-    }
-  });
-  assert.equal(started.status, 200);
-  assert.deepEqual(rpcBody, { p_action: 'timer-start', p_payload: { durationSeconds: 30 } });
+  assert.equal(authRoute.status, 404);
+  const sessionRoute = await handle(request('session'), { env });
+  assert.equal(sessionRoute.status, 404);
 });
 
 test('invalid timer duration and database failure have understandable responses', async () => {
   const invalid = await handle(request('timer/start', {
     method: 'POST',
     body: { durationSeconds: 86401 },
-    headers: { origin, cookie: facilitatorCookie() }
+    headers: { origin }
   }), { env });
   assert.equal(invalid.status, 400);
 
   const badDuration = await handle(request('timer/start', {
     method: 'POST',
     body: { durationSeconds: '30' },
-    headers: { origin, cookie: facilitatorCookie() }
+    headers: { origin }
   }), { env });
   assert.equal(badDuration.status, 400);
 
