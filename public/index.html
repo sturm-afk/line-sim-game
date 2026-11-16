@@ -50,7 +50,7 @@
       background: white;
       color: #17191c;
     }
-    select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible {
+    select:focus-visible, input:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible {
       outline: 3px solid var(--focus);
       outline-offset: 2px;
     }
@@ -64,17 +64,24 @@
       cursor: pointer;
       box-shadow: 0 2px 5px #073b5c24;
     }
-    #join, #done { background: var(--orange); }
+    #join { background: var(--orange); }
     #pass { background: #167a45; }
     #fail { background: #b42318; }
     button.secondary { border: 1px solid var(--border); background: #e5e9ed; color: var(--blue-deep); box-shadow: none; }
     button:disabled { opacity: .55; cursor: wait; }
     .row { display: flex; gap: .75rem; }
     .row button { flex: 1; min-height: 3.5rem; }
-    #player { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    #player { margin-top: 1.5rem; }
+    .team-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .team-row p { margin: 0; }
+    #count { color: var(--blue-deep); font-size: 2.5rem; line-height: 1; }
     #team-label { color: var(--blue-deep); }
+    #undo, #done { min-height: 6rem; font-size: 1.25rem; color: white; }
+    #undo { border: 0; background: #b6531d; box-shadow: 0 2px 5px #073b5c24; }
+    #done { background: linear-gradient(#1b9b58, #167a45); }
     #timer { padding: .75rem 1rem; border-left: 4px solid var(--blue); border-radius: .3rem; background: var(--blue-light); color: var(--blue-deep); font-weight: 700; }
     #status { min-height: 1.5rem; font-weight: 650; }
+    summary { color: var(--blue-deep); font-weight: 700; cursor: pointer; }
     .error { color: #b42318; } .success { color: #167a45; }
     a { color: var(--blue); font-weight: 650; }
     [hidden] { display: none !important; }
@@ -94,21 +101,28 @@
       <button id="join">Join team</button>
     </form>
     <section id="player" hidden>
-      <p>Team: <strong id="team-label"></strong></p>
-      <label for="station">Station</label>
-      <select id="station"></select>
-      <p id="timer">Checking game timer…</p>
+      <div class="team-row">
+        <p>Team: <strong id="team-label"></strong></p>
+        <strong id="count" aria-label="Your recorded completions">0</strong>
+      </div>
       <div id="standard">
-        <p>Your recorded completions here: <strong id="count">0</strong></p>
-        <div class="row"><button id="undo" class="secondary" type="button">− Undo latest</button><button id="done" type="button">+ Done!</button></div>
+        <div class="row"><button id="undo" type="button">Oops! -1</button><button id="done" type="button">Done! +1</button></div>
       </div>
       <div id="qc" hidden>
         <p>Team QC results: <strong id="qc-count">0 pass · 0 fail</strong></p>
         <div class="row"><button id="pass" type="button">Pass</button><button id="fail" type="button">Fail</button></div>
       </div>
-      <button id="change-team" class="secondary" type="button">Change team</button>
+      <p id="timer">Checking game timer…</p>
     </section>
     <p id="status" role="status" aria-live="polite"></p>
+    <section id="settings" hidden>
+      <details>
+        <summary>☰ Settings</summary>
+        <button id="change-team" class="secondary" type="button">Change team</button>
+        <label for="station">Station</label>
+        <select id="station"></select>
+      </details>
+    </section>
   </main>
   <script>
     const api = '/api/vercel';
@@ -175,6 +189,7 @@
       $('team-label').textContent = team.name;
       teamForm.hidden = true;
       player.hidden = false;
+      $('settings').hidden = false;
       localStorage.setItem('line-sim-vercel-team-id', team.id);
       refresh();
     }
@@ -182,7 +197,7 @@
       if (!team || pendingUndo) return;
       if (!pendingId) {
         pendingId = crypto.randomUUID();
-        pendingResult = result;
+        pendingResult = result ?? null;
       }
       const input = {
         id: pendingId, playerId, teamId: team.id, stationId: stationSelect.value,
@@ -209,7 +224,7 @@
         $('undo').disabled = Boolean(pendingId) || Boolean(pendingUndo) || !lastEventId;
         stationSelect.disabled = Boolean(pendingId) || Boolean(pendingUndo);
         $('change-team').disabled = Boolean(pendingId) || Boolean(pendingUndo);
-        $('done').textContent = pendingId && pendingResult === null ? 'Retry completion' : '+ Done!';
+        $('done').textContent = pendingId && pendingResult === null ? 'Retry completion' : 'Done! +1';
       }
     }
     $('team-form').addEventListener('submit', async event => {
@@ -235,6 +250,7 @@
       localStorage.setItem('line-sim-vercel-station-id', stationSelect.value);
       $('standard').hidden = selectedQc();
       $('qc').hidden = !selectedQc();
+      $('count').hidden = selectedQc();
       refresh();
     });
     $('done').addEventListener('click', () => record());
@@ -255,7 +271,7 @@
         });
         pendingUndo = null;
         lastEventId = null;
-        $('undo').textContent = '− Undo latest';
+        $('undo').textContent = 'Oops! -1';
         showStatus('Latest completion removed.', 'success');
         await refresh();
       } catch (error) {
@@ -273,6 +289,8 @@
     $('change-team').addEventListener('click', () => {
       team = null;
       player.hidden = true;
+      $('settings').hidden = true;
+      $('settings').querySelector('details').open = false;
       teamForm.hidden = false;
     });
     Promise.all([request('/stations'), request('/teams')]).then(([stations, response]) => {
