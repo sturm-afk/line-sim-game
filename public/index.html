@@ -92,7 +92,7 @@
 </head>
 <body>
   <main>
-    <h1>Line Sim Game</h1>
+    <h1 id="page-title">Line Sim Game</h1>
     <form id="team-form">
       <label for="team-choice">Existing team</label>
       <select id="team-choice"><option value="">Choose a team</option></select>
@@ -128,6 +128,7 @@
     const api = '/api/vercel';
     const qcStations = ['inspect-blister', 'inspect-box'];
     const $ = id => document.getElementById(id);
+    let stations = [];
     const teamForm = $('team-form');
     const teamChoice = $('team-choice');
     const teamName = $('team-name');
@@ -247,6 +248,8 @@
     teamChoice.addEventListener('change', () => { if (teamChoice.value) teamName.value = ''; });
     teamName.addEventListener('input', () => { if (teamName.value) teamChoice.value = ''; });
     stationSelect.addEventListener('change', () => {
+      const selectedStation = stations.find(item => item.id === stationSelect.value);
+      if (selectedStation) $('page-title').textContent = selectedStation.name;
       localStorage.setItem('line-sim-vercel-station-id', stationSelect.value);
       $('standard').hidden = selectedQc();
       $('qc').hidden = !selectedQc();
@@ -293,7 +296,8 @@
       $('settings').querySelector('details').open = false;
       teamForm.hidden = false;
     });
-    Promise.all([request('/stations'), request('/teams')]).then(([stations, response]) => {
+    Promise.all([request('/stations'), request('/teams')]).then(([availableStations, response]) => {
+      stations = availableStations;
       teams = response;
       teams.forEach(item => teamChoice.add(new Option(item.name, item.id)));
       stations.forEach(item => stationSelect.add(new Option(item.name, item.id)));

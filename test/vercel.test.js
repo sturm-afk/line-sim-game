@@ -39,6 +39,46 @@ test('player page puts prominent actions before timer and collapsed settings', (
   assert.match(page, /\$\('count'\)\.hidden = selectedQc\(\)/);
 });
 
+test('player page heading follows the initially selected station and station changes', async () => {
+  const page = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  const script = page.match(/<script>([\s\S]*?)<\/script>/i)[1];
+  const elements = {};
+  function element(id) {
+    return elements[id] ||= {
+      value: '', textContent: '', hidden: false, disabled: false, listeners: {},
+      addEventListener(type, listener) { this.listeners[type] = listener; },
+      dispatchEvent(event) { this.listeners[event.type]?.(event); },
+      add(option) { if (id === 'station' && !this.value) this.value = option.value; }
+    };
+  }
+  vm.runInNewContext(script, {
+    document: { getElementById: element },
+    localStorage: {
+      getItem: key => key.endsWith('station-id') ? 'cut-box' : null,
+      setItem() {}
+    },
+    crypto: { randomUUID: () => 'player-id' },
+    Option: function (name, value) { this.value = value; },
+    Event: function (type) { this.type = type; },
+    setInterval() {},
+    fetch: async url => {
+      if (url.endsWith('/stations')) return Response.json([
+        { id: 'cut-blister', name: 'Cut blister' },
+        { id: 'cut-box', name: 'Cut box' },
+        { id: 'inspect-box', name: 'Inspect box' }
+      ]);
+      if (url.endsWith('/teams')) return Response.json([]);
+      throw new Error(`Unexpected request: ${url}`);
+    }
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(elements.station.value, 'cut-box');
+  assert.equal(elements['page-title'].textContent, 'Cut box');
+  elements.station.value = 'inspect-box';
+  elements.station.listeners.change();
+  assert.equal(elements['page-title'].textContent, 'Inspect box');
+});
+
 test('player can retry a failed standard completion with the same event id', async () => {
   const page = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
   const script = page.match(/<script>([\s\S]*?)<\/script>/i)[1];
