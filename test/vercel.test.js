@@ -239,7 +239,7 @@ test('flat and legacy facilitator routes forward the same actions and enforce or
   }
 });
 
-test('scoreboard controls use one row, toggle the timer, and render counts without per-cell resets', async () => {
+test('scoreboard dashboard aggregates shipped counts and toggles the timer', async () => {
   const elements = new Map();
   function element() {
     return {
@@ -257,19 +257,27 @@ test('scoreboard controls use one row, toggle the timer, and render counts witho
     createElement: element
   };
   let snapshot = {
-    stations: [{ id: 'cut-box', name: 'Cut box' }],
-    teams: [{ id: 'team', name: 'Team' }],
-    counts: [{ teamId: 'team', stationId: 'cut-box', count: 2 }],
+    stations: [
+      { id: 'cut-box', name: 'Cut box' },
+      { id: 'ship-box', name: 'Ship box' }
+    ],
+    teams: [{ id: 'team', name: 'Team' }, { id: 'other-team', name: 'Other team' }],
+    counts: [
+      { teamId: 'team', stationId: 'cut-box', count: 2 },
+      { teamId: 'team', stationId: 'ship-box', count: 4 },
+      { teamId: 'other-team', stationId: 'ship-box', count: 7 }
+    ],
     timer: { durationSeconds: 60, endsAt: null, remainingSeconds: null },
     serverTime: Date.now()
   };
   const calls = [];
   let badResponse = false;
   const html = readFileSync(path.join(__dirname, '../public/scoreboard.html'), 'utf8');
-  assert.equal((html.match(/class="actions"/g) || []).length, 1);
-  assert.match(html, /id="start">Start</);
-  assert.match(html, /id="round-reset"[^>]*>New Run</);
-  assert.match(html, /id="game-reset"[^>]*>Reset Game</);
+  const markup = html.split('<script>')[0];
+  assert.match(markup, /class="timer-clock"[\s\S]*id="countdown"[\s\S]*id="start"[^>]*>Start/);
+  assert.match(markup, /id="duration"[^>]*>[\s\S]*<label for="duration">seconds<\/label>/);
+  assert.match(markup, /<tbody id="teams"><\/tbody>[\s\S]*<\/table>[\s\S]*id="connection"[\s\S]*id="status"/);
+  assert.doesNotMatch(markup, /New Run|Reset Game|round-reset|game-reset/);
   assert.doesNotMatch(html, /id="(?:stop|resume|timer-reset)"/);
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   vm.runInNewContext(script, {
@@ -292,6 +300,7 @@ test('scoreboard controls use one row, toggle the timer, and render counts witho
   const cell = elements.get('teams').children[0].children[1];
   assert.equal(cell.textContent, '2');
   assert.deepEqual(cell.children, []);
+  assert.equal(elements.get('total-shipped').textContent, 11);
   assert.equal(elements.get('start').textContent, 'Start');
   elements.get('timer-form').listeners.submit({ preventDefault() {} });
   await flush();
@@ -305,14 +314,6 @@ test('scoreboard controls use one row, toggle the timer, and render counts witho
   elements.get('timer-form').listeners.submit({ preventDefault() {} });
   await flush();
   assert.equal(calls.filter(call => call.options.method === 'POST').at(-1).url, '/api/vercel/timer-start');
-  for (const [id, route] of [
-    ['round-reset', 'round-reset'],
-    ['game-reset', 'game-reset']
-  ]) {
-    elements.get(id).listeners.click({ preventDefault() {} });
-    await flush();
-    assert.equal(calls.filter(call => call.options.method === 'POST').at(-1).url, `/api/vercel/${route}`);
-  }
   assert.deepEqual(JSON.parse(calls.filter(call => call.url.endsWith('/timer-start'))[0].options.body), {
     durationSeconds: 60
   });
